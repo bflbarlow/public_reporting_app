@@ -1,18 +1,6 @@
 # Reporting App
 
-A secure, embeddable reporting platform with HMAC-signed URLs and thick client architecture.
-
-## Architecture Principles
-
-1. **Single Loader, Single Truth** - One way to load all reports
-2. **No Fallback Logic** - Code reads linearly, no "try A then B then C"
-3. **Zero Duplication** - One source of truth for types and logic
-4. **Thick Client is the ONLY Data Bridge** - All data flows through `window.ReportApp`
-5. **Simple Over Clever** - Readable code wins over clever abstractions
-6. **No Backwards Compatibility** - This project is in development. The end result of all coding changes must be a purely clean codebase.
-7. **With One Voice** - The codebase should be considered a single voice as if created by a single developer with a singular vision.
-8. **Focus On Destination** - Any development and code changes must define the destination and define the path for which to get there.
-
+A secure, embeddable reporting platform serving html+javascript reports with HMAC-signed URLs and thick client architecture.
 
 ## Core Requirements
 
@@ -21,6 +9,41 @@ These details are to *ALWAYS* be maintained with every code change.
 1. **Embeddability** - The sole purpose of this application is to produce embeddable reports into a parent application.
 2. **Security** - This application must secure access to data for only those that the application intends. This includes HMAC Signatures (including immutable parameters), NONCE values, and expired URLs.
 3. **Thick Client** - Only one mechanism handles the movement of data on the client side. The thick client's sole purpose is to coordinate requests from the client to the reporting app to refresh data and provide that data back to the client.
+
+## The Four-Component Architecture
+
+| Component | Location | Responsibilities | Key Technologies |
+|-----------|----------|------------------|------------------|
+| **Parent Application** | Your web app (SaaS, portal) | • User authentication & permissions<br>• Generate signed URLs<br>• Embed iframes with parameters<br>• Control report lifecycle | Any web framework |
+| **Reporting App** | Go server binary | • Load reports & execute SQL<br>• Validate HMAC signatures<br>• Render HTML templates<br>• Manage database connections | Go, MySQL, HTML templates |
+| **Thick Client** | Browser JavaScript | • Client-side filtering & charting<br>• AJAX data refresh<br>• UI interactions & cross-filtering<br>• Data management | Vanilla JS, Chart.js (optional) |
+| **Report** | Report developer's code | • Custom visualization rendering<br>• Complex interactivity and coordination<br>• Integration with specialized charting libraries | React, D3, Plotly, etc. |
+
+## Definitions
+
+| Term | Definition |
+|------|------------|
+| **Client** | The web browser that loads both the Parent Application and the Reporting App via iframes. Executes client-side JavaScript and manages user interaction with embedded reports. |
+| **Report** | A named collection of charts that display data from a specific database. Defined by a `metadata.yaml` file and a `dashboard.html` template. |
+| **Page** | The HTML document served by the Reporting App that contains a fully hydrated report. The page includes inline data, JavaScript for interactivity, and strict security headers. |
+| **Chart** | A single visual element within a report (e.g., line chart, bar chart, table). Each chart has a unique ID, a title, a SQL query, and rendering configuration. |
+| **Thick Client** | The JavaScript code (`/static/thick_client.js`) that runs inside the iframe and handles all client-side interactivity-filtering, charting, drill-down, and AJAX refresh. |
+| **Parent Application** | Your main web application (SaaS, portal, internal tool) that embeds reports via iframes. It generates HMAC-signed URLs and decides which users can access which reports. |
+| **Reporting App** | The Go server binary that validates HMAC signatures, executes SQL queries, and renders hydrated report pages. It serves as the secure backend for embedded reporting. |
+| **Iframe** | An HTML `<iframe>` element that isolates the report from the parent application. The iframe has strict sandbox attributes and cannot communicate with the parent page. |
+| **Embed** | The act of inserting a report into a web page using an iframe with an HMAC-signed URL. |
+| **HMAC-signed URL** | A cryptographically signed web address that grants temporary, single-use access to a specific report. Contains a nonce, expiry timestamp, and HMAC-SHA256 signature. |
+| **Nonce** | A random, single-use token that prevents replay attacks. Each signed URL includes a unique nonce that can only be used once. |
+| **CSP** | Content Security Policy-a set of HTTP headers that restrict which resources (scripts, styles, etc.) the browser can load, preventing XSS and other attacks. |
+| **CORS** | Cross-Origin Resource Sharing-headers that control which external domains are allowed to embed the Reporting App's pages via iframes. |
+| **Database Connection** | A read-only connection to a SQL database, defined in `databases.yaml`. Each report is associated with one database connection. |
+| **Parameterized Query** | A SQL query that contains placeholders like `{{start_date}}` which are safely replaced with values from the URL query string, preventing SQL injection. |
+| **Refresh Endpoint** | The `/refresh` API endpoint that accepts a signed URL and returns fresh data plus a new signed URL, enabling AJAX-based updates without page reloads. |
+| **Chart Data** | The JSON-encoded query results (columns and rows) for a chart, embedded inline in the page as `window.__chart_data__`. |
+| **Manifest** | A YAML file defining datasource-based reports. Contains datasource definitions, parameter schemas, and configuration for JavaScript-first development. Location: `reports/{report}.yaml`. |
+| **Datasource** | A named SQL query in a manifest that provides data to JavaScript visualizations. Has parameter substitution, caching, and execution limits. |
+| **Client API** | The `window.__reportData` object injected into datasource-based reports, providing structured access to datasources via `getRows()` and `getColumns()` methods. These methods use the thick client (`window.ReportApp.refreshDatasource()`) as the sole data bridge to the reporting app. Direct API endpoints are disabled. |
+| **Parameter Classification** | The system of categorizing parameters as immutable (security boundaries, HMAC-signed) or mutable (user filters, not signed). Applies to both chart-based and datasource-based reports. |
 
 ## Quick Start
 

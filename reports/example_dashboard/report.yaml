@@ -12,6 +12,8 @@ immutable_params:
   - user_id
 
 # Mutable parameters (can be changed by user)
+# All mutable parameters must appear in URLs (empty values allowed)
+# Empty values become SQL NULL in queries
 mutable_params:
   - start_date
   - end_date
@@ -44,5 +46,7 @@ datasources:
       FROM orders
       WHERE organization_id = {{organization_id}}
         AND order_date BETWEEN {{start_date}} AND {{end_date}}
+        -- Handle optional status filter (empty = NULL = all statuses)
+        AND ({{status}} IS NULL OR status = {{status}})
       GROUP BY status
     row_limit: 100

@@ -456,13 +456,20 @@
                 }
             }
             
-            // Set filter values
+            // Set filter values (use defaults when params are empty/missing)
+            const defaultStartDate = '2024-01-01';
+            const defaultEndDate = '2027-01-01';
+            
             if (params.start_date) {
                 document.getElementById('start-date').value = params.start_date;
+            } else {
+                document.getElementById('start-date').value = defaultStartDate;
             }
             
             if (params.end_date) {
                 document.getElementById('end-date').value = params.end_date;
+            } else {
+                document.getElementById('end-date').value = defaultEndDate;
             }
             
             // Initialize state.filters with current parameters
@@ -491,7 +498,7 @@
             
             // Reset filters button
             document.getElementById('reset-filters').addEventListener('click', () => {
-                // Reset to original parameters
+                // Reset to original parameters (use defaults when not set)
                 const config = window.ReportConfig || {};
                 // Handle params as JSON string or object
                 let params = {};
@@ -508,13 +515,13 @@
                     }
                 }
                 
-                document.getElementById('start-date').value = params.start_date || '';
-                document.getElementById('end-date').value = params.end_date || '';
+                document.getElementById('start-date').value = params.start_date || '2024-01-01';
+                document.getElementById('end-date').value = params.end_date || '2027-01-01';
                 
                 // Reset all filter values including deprecated ones
                 state.filters = {
-                    start_date: params.start_date || '',
-                    end_date: params.end_date || ''
+                    start_date: params.start_date || '2024-01-01',
+                    end_date: params.end_date || '2027-01-01'
                 };
                 
                 loadData();

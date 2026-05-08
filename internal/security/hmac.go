@@ -68,6 +68,7 @@ func signMessage(message string, secret []byte) string {
 }
 
 // ExtractParams extracts all parameters (except HMAC params) from query string
+// Includes parameters even with empty values to support optional mutable parameters
 func ExtractParams(query url.Values) map[string]string {
 	params := make(map[string]string)
 	
@@ -78,8 +79,12 @@ func ExtractParams(query url.Values) map[string]string {
 			continue
 		}
 		
-		if len(values) > 0 && values[0] != "" {
+		if len(values) > 0 {
+			// Include parameter even if value is empty string
 			params[key] = values[0]
+		} else {
+			// Parameter without value (key with no =) becomes empty string
+			params[key] = ""
 		}
 	}
 	

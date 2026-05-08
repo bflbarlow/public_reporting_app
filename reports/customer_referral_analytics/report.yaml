@@ -26,7 +26,7 @@ datasources:
              COUNT(*) AS total_referrals,
              SUM(CASE WHEN referral_status = 'Completed' THEN 1 ELSE 0 END) AS completed
       FROM referrals
-      WHERE referral_date BETWEEN {{start_date}} AND {{end_date}}
+      WHERE referral_date BETWEEN COALESCE({{start_date}}, '2024-01-01') AND COALESCE({{end_date}}, '2027-01-01')
       GROUP BY DATE(referral_date)
       ORDER BY day
     row_limit: 1000
@@ -39,7 +39,7 @@ datasources:
       SELECT referral_status,
              COUNT(*) AS count
       FROM referrals
-      WHERE referral_date BETWEEN {{start_date}} AND {{end_date}}
+      WHERE referral_date BETWEEN COALESCE({{start_date}}, '2024-01-01') AND COALESCE({{end_date}}, '2027-01-01')
       GROUP BY referral_status
       ORDER BY count DESC
     row_limit: 100
@@ -54,7 +54,7 @@ datasources:
              COUNT(DISTINCT seeker_id) AS unique_seekers,
              AVG(CASE WHEN referral_status = 'Completed' THEN 1 ELSE 0 END) * 100 AS completion_rate
       FROM referrals
-      WHERE referral_date BETWEEN {{start_date}} AND {{end_date}}
+      WHERE referral_date BETWEEN COALESCE({{start_date}}, '2024-01-01') AND COALESCE({{end_date}}, '2027-01-01')
       GROUP BY contact_method
       HAVING total > 0
       ORDER BY total DESC
@@ -70,7 +70,7 @@ datasources:
              COUNT(DISTINCT sender_user_id) AS unique_senders,
              SUM(CASE WHEN referral_status = 'Completed' THEN 1 ELSE 0 END) AS completed
       FROM referrals
-      WHERE referral_date BETWEEN {{start_date}} AND {{end_date}}
+      WHERE referral_date BETWEEN COALESCE({{start_date}}, '2024-01-01') AND COALESCE({{end_date}}, '2027-01-01')
       GROUP BY DATE_FORMAT(referral_date, '%Y-%m')
       ORDER BY month
     row_limit: 100
@@ -82,7 +82,7 @@ datasources:
     sql: |
       SELECT COUNT(DISTINCT seeker_id) AS unique_seekers
       FROM referrals
-      WHERE referral_date BETWEEN {{start_date}} AND {{end_date}}
+      WHERE referral_date BETWEEN COALESCE({{start_date}}, '2024-01-01') AND COALESCE({{end_date}}, '2027-01-01')
     row_limit: 100
     cache_ttl: 600
     description: "Count of unique seekers across the period"

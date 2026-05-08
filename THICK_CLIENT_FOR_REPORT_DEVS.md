@@ -117,10 +117,23 @@ function parseReportConfig() {
 
 ### Understanding Parameter Types
 
-| Type | Description | Can be changed? | In HMAC signature? |
-|------|-------------|-----------------|-------------------|
-| **Immutable** | Core security parameters (e.g., organization_id) | ❌ Never | ✅ Yes |
-| **Mutable** | User-changeable filters (e.g., dates, status) | ✅ Yes | ❌ No |
+| Type | Description | Can be changed? | In HMAC signature? | URL Presence Required? |
+|------|-------------|-----------------|-------------------|------------------------|
+| **Immutable** | Core security parameters (e.g., organization_id) | ❌ Never | ✅ Yes | ✅ Required with value |
+| **Mutable** | User-changeable filters (e.g., dates, status) | ✅ Yes | ❌ No | ✅ Required (can be empty) |
+
+### Optional Mutable Parameters
+
+Mutable parameters can be **optionally provided** in the URL, meaning:
+1. **All declared mutable parameters must appear in the URL** (enforced by refresh flow)
+2. **Empty values are allowed** (`?status=&start_date=2024-01-01`)
+3. **Empty values become SQL NULL** in database queries
+4. **SQL should handle NULL** using patterns like: `WHERE ({{status}} IS NULL OR column = {{status}})`
+
+This allows for flexible filter controls where users can:
+- Select "All" for a filter (empty value → NULL)
+- Gradually add filters without changing SQL
+- Clear filters while maintaining URL structure
 
 ### Working with Parameters
 
@@ -152,7 +165,56 @@ try {
     // - "Cannot change immutable parameter: organization_id"
     // - "Unknown parameter: invalid_param_name"
 }
+
+// Working with optional parameters
+// Set a parameter to empty (will become NULL in SQL)
+window.ReportApp.setParam('status', ''); // Empty string → SQL NULL
+console.log('Cleared status filter');
+
+// Check if parameter is empty (optional)
+const currentStatus = window.ReportApp.getParam('status');
+if (currentStatus === '') {
+    console.log('Status filter is cleared (SQL NULL)');
+}
 ```
+
+## SQL Query Design for Optional Parameters
+
+### Pattern for Handling Empty/NULL Parameters
+
+When mutable parameters can be empty (become SQL NULL), design your SQL queries to handle this:
+
+```sql
+-- BAD: Direct comparison breaks with NULL
+WHERE status = {{status}}
+
+-- GOOD: Handle NULL properly
+WHERE ({{status}} IS NULL OR status = {{status}})
+
+-- GOOD: Multiple optional filters
+WHERE organization_id = {{organization_id}}
+  AND created_at BETWEEN {{start_date}} AND {{end_date}}
+  AND ({{status}} IS NULL OR status = {{status}})
+  AND ({{category}} IS NULL OR category = {{category}})
+
+-- GOOD: LIKE patterns with NULL
+WHERE ({{search_term}} IS NULL OR name LIKE CONCAT('%', {{search_term}}, '%'))
+
+-- GOOD: IN clause with NULL
+WHERE ({{status_list}} IS NULL OR status IN ({{status_list}}))
+```
+
+**Why this works:**
+- When parameter is empty (`""`), it becomes SQL `NULL`
+- `NULL IS NULL` evaluates to `TRUE`
+- Whole condition becomes `TRUE OR status = NULL` = `TRUE`
+- Filter is effectively ignored ("show all")
+
+### Testing Your SQL
+
+1. **Test with empty parameters:** `go run main.go -genurl -report my_report -params "organization_id=123,status=,start_date=2024-01-01"`
+2. **Verify SQL output:** Check server logs for generated queries
+3. **Validate data:** Ensure all data appears when filters are empty
 
 ## Fetching Data with `refresh()`
 
@@ -269,6 +331,8 @@ async function refreshWithValidation(newParams) {
     const finalParams = { ...currentParams, ...newParams };
     
     // Check for empty required parameters
+    // Note: Some parameters can be empty (optional mutable params)
+    // Only validate if they're truly required
     if (!finalParams.start_date || !finalParams.end_date) {
         showError('Start date and end date are required');
         return;
@@ -286,6 +350,33 @@ async function refreshWithValidation(newParams) {
     }
     
     return await fetchData(newParams);
+}
+```
+
+#### 4. **Working with Optional Parameters**
+```javascript
+// Clear a filter (sets to empty string → SQL NULL)
+async function clearStatusFilter() {
+    try {
+        await window.ReportApp.setParam('status', '');
+        const data = await window.ReportApp.refresh({});
+        console.log('Filter cleared, showing all statuses');
+        return data;
+    } catch (error) {
+        console.error('Failed to clear filter:', error);
+    }
+}
+
+// Check if filter is active or cleared
+function isFilterActive(paramName) {
+    const value = window.ReportApp.getParam(paramName);
+    return value !== '' && value !== null && value !== undefined;
+}
+
+// Apply filter if value provided, otherwise clear
+async function applyOptionalFilter(paramName, value) {
+    const finalValue = value || ''; // Convert falsy to empty string
+    return await window.ReportApp.refresh({ [paramName]: finalValue });
 }
 ```
 

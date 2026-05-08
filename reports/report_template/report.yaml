@@ -24,11 +24,14 @@ immutable_params:
 # Mutable parameters: Can be changed by users via UI
 # These are NOT included in HMAC signature
 # Typically includes: date ranges, filter options, etc.
+# IMPORTANT: All mutable parameters must appear in URLs (can be empty)
+# Empty values become SQL NULL - design queries to handle NULL with:
+# WHERE ({{param}} IS NULL OR column = {{param}})
 mutable_params:
   - start_date                         # Common: start date for date range filters
   - end_date                           # Common: end date for date range filters
+  - status                             # Example: status filter (empty = all)
   # Add your mutable parameters here:
-  # - status
   # - category
   # - region
 
@@ -85,6 +88,8 @@ datasources:
       FROM your_table
       WHERE organization_id = {{organization_id}}
         AND created_at BETWEEN {{start_date}} AND {{end_date}}
+        -- Handle optional status filter (empty = NULL = all)
+        AND ({{status}} IS NULL OR status = {{status}})
       GROUP BY category
       ORDER BY total_amount DESC
     row_limit: 50
@@ -125,11 +130,14 @@ datasources:
 #    - All parameters referenced in SQL must be declared above
 #    - Immutable parameters: For security & data isolation
 #    - Mutable parameters: For user-adjustable filters
+#    - ALL mutable parameters must appear in URLs (can be empty)
+#    - Empty values become SQL NULL - use: WHERE ({{param}} IS NULL OR column = {{param}})
 #
 # 4. ERROR HANDLING:
 #    - Test queries with NULL/empty parameter values
 #    - Ensure date ranges are valid (start_date <= end_date)
 #    - Handle missing data gracefully in dashboard.html
+#    - Design queries to handle optional filters: WHERE ({{param}} IS NULL OR column = {{param}})
 #
 # 5. TESTING:
 #    - Generate test URL: go run main.go -genurl -report report_template -params "organization_id=1,start_date=2024-01-01,end_date=2024-12-31"

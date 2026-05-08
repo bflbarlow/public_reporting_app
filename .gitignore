@@ -1,0 +1,32 @@
+# Binaries
+reporting_app
+
+# Environment
+.env
+
+# Database config (may contain secrets)
+databases.yaml
+
+# Query logs
+query_log/
+
+# Report-specific files (user-generated, not part of the template)
+reports/*/dashboard.html
+reports/*/report.js
+reports/*/manifest.yaml
+reports/*/data/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+pkg/
+modcache/

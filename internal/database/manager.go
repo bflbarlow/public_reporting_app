@@ -11,6 +11,9 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"gopkg.in/yaml.v3"
+	
+	"reporting_app/internal/core"
+	"reporting_app/internal/logging"
 )
 
 // ConnectionConfig defines a single database connection
@@ -32,10 +35,16 @@ type Config struct {
 type Manager struct {
 	config  *Config
 	clients map[string]*sql.DB
+	logger  *logging.QueryLogger
 }
 
 // NewManager creates a new database manager by loading config from path
 func NewManager(configPath string) (*Manager, error) {
+	return NewManagerWithLogger(configPath, nil)
+}
+
+// NewManagerWithLogger creates a new database manager with query logger
+func NewManagerWithLogger(configPath string, logger *logging.QueryLogger) (*Manager, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read database config %s: %w", configPath, err)
@@ -56,6 +65,7 @@ func NewManager(configPath string) (*Manager, error) {
 	m := &Manager{
 		config:  &config,
 		clients: make(map[string]*sql.DB),
+		logger:  logger,
 	}
 	
 	// Initialize each connection
@@ -132,4 +142,9 @@ func (m *Manager) ConnectionConfig(name string) (*ConnectionConfig, error) {
 		return nil, fmt.Errorf("database connection %q not found", name)
 	}
 	return &cfg, nil
+}
+
+// ExecuteDatasourceManager is a convenience function that uses the manager's logger
+func (m *Manager) ExecuteDatasource(db *sql.DB, ds core.Datasource, params map[string]string, defaultRowLimit int, timeout time.Duration, reportID, datasource, dbName string) (*core.QueryResult, error) {
+	return ExecuteDatasourceWithLogger(db, ds, params, defaultRowLimit, timeout, reportID, datasource, dbName, m.logger)
 }

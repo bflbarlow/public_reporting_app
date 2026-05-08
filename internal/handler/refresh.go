@@ -270,7 +270,7 @@ func (h *RefreshHandler) executeDatasources(report *core.Report, params map[stri
 	// Execute each datasource
 	result := make(map[string]interface{})
 	for name, ds := range report.Datasources {
-		queryResult, err := database.ExecuteDatasource(db, ds, params, rowLimit, timeout)
+		queryResult, err := h.dbManager.ExecuteDatasource(db, ds, params, rowLimit, timeout, report.ID, name, report.Database)
 		if err != nil {
 			return nil, fmt.Errorf("datasource %s: %w", name, err)
 		}
@@ -302,11 +302,10 @@ func (h *RefreshHandler) generateNextURL(report *core.Report, params map[string]
 	urlStr := fmt.Sprintf("/api/embed?report_id=%s&expires=%d&nonce=%s&sig=%s",
 		report.ID, expires, nonce, sig)
 	
-	// Add all parameters
+	// Add all parameters (including empty values for optional mutable parameters)
 	for key, value := range params {
-		if value != "" {
-			urlStr += fmt.Sprintf("&%s=%s", url.QueryEscape(key), url.QueryEscape(value))
-		}
+		// Always include parameter, even if empty
+		urlStr += fmt.Sprintf("&%s=%s", url.QueryEscape(key), url.QueryEscape(value))
 	}
 	
 	return urlStr, nil
@@ -317,11 +316,10 @@ func (h *RefreshHandler) generateNextURLPublic(report *core.Report, params map[s
 	// Build URL with just report_id and parameters
 	urlStr := fmt.Sprintf("/api/embed?report_id=%s", report.ID)
 	
-	// Add all parameters
+	// Add all parameters (including empty values for optional mutable parameters)
 	for key, value := range params {
-		if value != "" {
-			urlStr += fmt.Sprintf("&%s=%s", url.QueryEscape(key), url.QueryEscape(value))
-		}
+		// Always include parameter, even if empty
+		urlStr += fmt.Sprintf("&%s=%s", url.QueryEscape(key), url.QueryEscape(value))
 	}
 	
 	return urlStr, nil

@@ -112,6 +112,8 @@ func isValidParamName(name string) bool {
 }
 
 // InjectParams injects parameters into SQL, replacing {{param}} with ?
+// Converts empty string values to SQL NULL for optional parameter support
+// For parameters not in the map, injects NULL (nil) to support optional mutable parameters
 func InjectParams(sql string, params map[string]string) (string, []interface{}) {
 	re := regexp.MustCompile(`\{\{(\w+)\}\}`)
 	
@@ -127,13 +129,19 @@ func InjectParams(sql string, params map[string]string) (string, []interface{}) 
 		// Extract parameter name
 		paramName := sql[match[2]:match[3]]
 		
+		result.WriteString("?")
+		
 		// Get value from params
 		if value, ok := params[paramName]; ok {
-			result.WriteString("?")
-			args = append(args, value)
+			// Convert empty string to nil for SQL NULL
+			if value == "" {
+				args = append(args, nil)
+			} else {
+				args = append(args, value)
+			}
 		} else {
-			// Keep placeholder if value not provided
-			result.WriteString("{{" + paramName + "}}")
+			// Parameter not provided at all - inject NULL
+			args = append(args, nil)
 		}
 		
 		lastIndex = match[1]

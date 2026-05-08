@@ -15,6 +15,7 @@ import (
 	"reporting_app/internal/database"
 	"reporting_app/internal/handler"
 	"reporting_app/internal/loader"
+	"reporting_app/internal/logging"
 	"reporting_app/internal/security"
 	"reporting_app/internal/server"
 )
@@ -51,8 +52,16 @@ func main() {
 	nonceTracker := security.NewNonceTracker(60 * time.Second)
 	defer nonceTracker.Stop()
 
+	// Initialize query logging
+	queryLogger := logging.NewQueryLogger(config.queryLogging, config.queryLogDir)
+	defer queryLogger.Close()
+	
+	if config.queryLogging {
+		log.Printf("📝 Query logging enabled: %s", config.queryLogDir)
+	}
+
 	// Initialize database
-	dbManager, err := database.NewManager(config.databasesConfig)
+	dbManager, err := database.NewManagerWithLogger(config.databasesConfig, queryLogger)
 	if err != nil {
 		log.Fatalf("Failed to initialize database manager: %v", err)
 	}
@@ -100,6 +109,8 @@ type config struct {
 	enablePublicPaths bool
 	allowOrigins    []string
 	allowedCDNs     []string
+	queryLogging    bool
+	queryLogDir     string
 }
 
 func loadConfig() *config {
@@ -173,6 +184,19 @@ func loadConfig() *config {
 		cfg.allowedCDNs = []string{}
 	}
 
+	// Query logging
+	if logging := os.Getenv("QUERY_LOGGING"); logging != "" {
+		cfg.queryLogging = (logging == "true" || logging == "1")
+	} else {
+		cfg.queryLogging = false
+	}
+
+	if dir := os.Getenv("QUERY_LOG_DIR"); dir != "" {
+		cfg.queryLogDir = dir
+	} else {
+		cfg.queryLogDir = "./query_log"
+	}
+
 	return cfg
 }
 
@@ -237,11 +261,10 @@ func generateURL(reportID string, expiresSec int, paramsStr string) {
 	finalURL := fmt.Sprintf("http://localhost:8080/api/embed?report_id=%s&expires=%d&nonce=%s&sig=%s",
 		reportID, expires, nonce, sig)
 
-	// Add all parameters
+	// Add all parameters (including empty values for optional mutable parameters)
 	for key, value := range params {
-		if value != "" {
-			finalURL += fmt.Sprintf("&%s=%s", url.QueryEscape(key), url.QueryEscape(value))
-		}
+		// Always include parameter, even if empty
+		finalURL += fmt.Sprintf("&%s=%s", url.QueryEscape(key), url.QueryEscape(value))
 	}
 
 	fmt.Println(finalURL)
