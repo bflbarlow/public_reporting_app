@@ -1,0 +1,114 @@
+# Customer Seeker Analytics Dashboard using Plotly.js
+id: customer_seeker_analytics
+name: "Seeker Analytics Dashboard"
+description: "Comprehensive seeker profile analytics and interactive visualizations"
+database: customer_sql
+visibility: public
+expires_after: 3600
+max_rows: 10000
+
+# Immutable parameters (included in HMAC signature)
+immutable_params:
+  - organization_id
+
+# Mutable parameters (can be changed by user)
+mutable_params:
+  - start_date
+  - end_date
+
+# Datasources - named SQL queries
+datasources:
+  # Seeker profile overview
+  seeker_profiles:
+    sql: |
+      SELECT 
+        DATE(seeker_profile_created_at) AS profile_date,
+        COUNT(*) AS new_profiles,
+        COUNT(DISTINCT email) AS unique_emails,
+        AVG(CASE WHEN is_archived = 'active' THEN 1 ELSE 0 END) * 100 AS active_rate,
+        AVG(CASE WHEN follow_up = 1 THEN 1 ELSE 0 END) * 100 AS follow_up_rate
+      FROM seeker_profiles
+      WHERE seeker_profile_created_at BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY DATE(seeker_profile_created_at)
+      ORDER BY profile_date
+    cache_ttl: 300
+    description: "Daily seeker profile creation and status metrics"
+
+  # Seeker geographic distribution
+  geographic_distribution:
+    sql: |
+      SELECT 
+        sp.subdomain,
+        COUNT(*) AS seeker_count,
+        COUNT(DISTINCT sp.email) AS unique_emails,
+        COUNT(DISTINCT r.seeker_id) AS referred_seekers,
+        AVG(CASE WHEN r.referral_status = 'Completed' THEN 1 ELSE 0 END) * 100 AS referral_completion_rate
+      FROM seeker_profiles sp
+      LEFT JOIN referrals r ON sp.seeker_id = r.seeker_id
+        AND r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+      WHERE sp.seeker_profile_created_at BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY sp.subdomain
+      HAVING COUNT(*) > 0
+      ORDER BY seeker_count DESC
+    row_limit: 100
+    description: "Seeker distribution by subdomain/geography"
+
+  # Seeker engagement metrics
+  engagement_metrics:
+    sql: |
+      SELECT 
+        DATE_FORMAT(sp.seeker_profile_created_at, '%Y-%m') AS month,
+        COUNT(DISTINCT sp.seeker_id) AS new_seekers,
+        COUNT(DISTINCT r.id_referrals) AS total_referrals,
+        COUNT(DISTINCT n.id_notes) AS total_notes,
+        COUNT(DISTINCT a.id_assessments) AS total_assessments,
+        AVG(CASE WHEN r.referral_status = 'Completed' THEN 1 ELSE 0 END) * 100 AS referral_success_rate
+      FROM seeker_profiles sp
+      LEFT JOIN referrals r ON sp.seeker_id = r.seeker_id
+        AND r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+      LEFT JOIN notes n ON sp.seeker_id = n.seeker_id
+        AND n.note_created_at BETWEEN {{start_date}} AND {{end_date}}
+      LEFT JOIN assessments a ON sp.seeker_id = a.seeker_id
+        AND a.created_at BETWEEN {{start_date}} AND {{end_date}}
+      WHERE sp.seeker_profile_created_at BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY DATE_FORMAT(sp.seeker_profile_created_at, '%Y-%m')
+      HAVING COUNT(DISTINCT sp.seeker_id) > 0
+      ORDER BY month
+    cache_ttl: 600
+    description: "Monthly seeker engagement metrics across multiple activities"
+
+  # Seeker household analysis (placeholder - actual table/column may not exist)
+  household_analysis:
+    sql: |
+      SELECT 
+        1 AS household_size,
+        0 AS seeker_count,
+        0 AS total_referrals,
+        0.0 AS completion_rate,
+        0 AS program_diversity
+      WHERE 1=0
+    row_limit: 50
+    description: "Analysis of seekers by household size (placeholder)"
+
+  # Seeker activity timeline
+  activity_timeline:
+    sql: |
+      SELECT 
+        sp.seeker_id,
+        sp.first_name,
+        sp.last_name,
+        sp.seeker_profile_created_at AS profile_created,
+        MIN(r.referral_date) AS first_referral,
+        MAX(r.referral_date) AS last_referral,
+        COUNT(r.id_referrals) AS referral_count,
+        COUNT(DISTINCT r.program_numeric_id) AS program_count
+      FROM seeker_profiles sp
+      LEFT JOIN referrals r ON sp.seeker_id = r.seeker_id
+        AND r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+      WHERE sp.seeker_profile_created_at BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY sp.seeker_id, sp.first_name, sp.last_name, sp.seeker_profile_created_at
+      HAVING COUNT(r.id_referrals) > 0
+      ORDER BY referral_count DESC
+      LIMIT 50
+    row_limit: 100
+    description: "Top seekers by referral activity"

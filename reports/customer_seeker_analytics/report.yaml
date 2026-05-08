@@ -1,0 +1,145 @@
+# Customer Seeker Analytics Dashboard using Plotly.js
+id: customer_seeker_analytics
+name: "Seeker Analytics Dashboard"
+description: "Comprehensive seeker profile analytics and interactive visualizations"
+database: customer_sql
+visibility: public
+expires_after: 3600
+max_rows: 10000
+
+# Immutable parameters (included in HMAC signature)
+immutable_params:
+  - organization_id
+
+# Mutable parameters (can be changed by user)
+mutable_params:
+  - start_date
+  - end_date
+
+# organization_id is omitted from the queries on purpose. Do not include them back in.
+# Datasources - named SQL queries
+datasources:
+  # Seeker profile overview
+  seeker_profiles:
+    sql: |
+      SELECT 
+        DATE(seeker_profile_created_at) AS profile_date,
+        COUNT(*) AS new_profiles,
+        COUNT(DISTINCT email) AS unique_emails,
+        AVG(CASE WHEN is_archived = 'active' THEN 1 ELSE 0 END) * 100 AS active_rate,
+        AVG(CASE WHEN follow_up = 1 THEN 1 ELSE 0 END) * 100 AS follow_up_rate
+      FROM seeker_profiles
+      WHERE seeker_profile_created_at BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY DATE(seeker_profile_created_at)
+      ORDER BY profile_date
+    cache_ttl: 300
+    description: "Daily seeker profile creation and status metrics"
+
+  # Seeker geographic distribution
+  geographic_distribution:
+    sql: |
+      SELECT 
+        sp.subdomain,
+        COUNT(*) AS seeker_count,
+        COUNT(DISTINCT sp.email) AS unique_emails,
+        COUNT(DISTINCT r.seeker_id) AS referred_seekers,
+        AVG(CASE WHEN r.referral_status = 'Completed' THEN 1 ELSE 0 END) * 100 AS referral_completion_rate
+      FROM seeker_profiles sp
+      LEFT JOIN referrals r ON sp.seeker_id = r.seeker_id
+        AND r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+      WHERE sp.seeker_profile_created_at BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY sp.subdomain
+      HAVING COUNT(*) > 0
+      ORDER BY seeker_count DESC
+    row_limit: 100
+    description: "Seeker distribution by subdomain/geography"
+
+  # Seeker engagement metrics (debug version - simpler)
+  engagement_metrics:
+    sql: |
+      WITH engagement_data AS (
+        SELECT 
+          DATE_FORMAT(sp.seeker_profile_created_at, '%Y-%m') AS month,
+          COUNT(DISTINCT sp.seeker_id) AS new_seekers,
+          COUNT(DISTINCT r.id_referrals) AS total_referrals,
+          0 AS total_notes,  -- Placeholder for now
+          0 AS total_assessments,  -- Placeholder for now
+          CASE 
+            WHEN COUNT(DISTINCT r.id_referrals) > 0 THEN 
+              AVG(CASE WHEN r.referral_status = 'Completed' THEN 1 ELSE 0 END) * 100 
+            ELSE 0 
+          END AS referral_success_rate
+        FROM seeker_profiles sp
+        LEFT JOIN referrals r ON sp.seeker_id = r.seeker_id
+          AND r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+        WHERE sp.seeker_profile_created_at BETWEEN {{start_date}} AND {{end_date}}
+        GROUP BY DATE_FORMAT(sp.seeker_profile_created_at, '%Y-%m')
+      )
+      SELECT * FROM engagement_data
+      UNION ALL
+      SELECT 'No Data' AS month, 0 AS new_seekers, 0 AS total_referrals, 0 AS total_notes, 0 AS total_assessments, 0 AS referral_success_rate
+      WHERE NOT EXISTS (SELECT 1 FROM engagement_data)
+      ORDER BY month
+    cache_ttl: 600
+    description: "Monthly seeker engagement metrics (referrals only for now)"
+
+  # Program category insights (replaces household analysis)
+  household_analysis:
+    sql: |
+      WITH program_insights AS (
+        SELECT 
+          COALESCE(p.program_name, 'Unknown Program') AS program_name,
+          COALESCE(p.categories, 'Uncategorized') AS categories,
+          COUNT(DISTINCT r.id_referrals) AS referral_count,
+          COUNT(DISTINCT r.seeker_id) AS seeker_count,
+          CASE 
+            WHEN COUNT(DISTINCT r.id_referrals) > 0 THEN 
+              AVG(CASE WHEN r.referral_status = 'Completed' THEN 1 ELSE 0 END) * 100 
+            ELSE 0 
+          END AS completion_rate
+        FROM referrals r
+        LEFT JOIN programs p ON r.program_numeric_id = p.program_numeric_id
+        WHERE r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+        GROUP BY p.program_numeric_id, p.program_name, p.categories
+        HAVING COUNT(DISTINCT r.id_referrals) > 0
+      )
+      SELECT 
+        program_name AS status_group,
+        seeker_count,
+        referral_count AS total_referrals,
+        completion_rate
+      FROM program_insights
+      UNION ALL
+      SELECT 'No Programs' AS status_group, 0 AS seeker_count, 0 AS total_referrals, 0 AS completion_rate
+      WHERE NOT EXISTS (SELECT 1 FROM program_insights)
+      ORDER BY total_referrals DESC
+      LIMIT 15
+    row_limit: 50
+    description: "Top programs by referral volume with completion rates"
+
+  # Seeker activity timeline
+  activity_timeline:
+    sql: |
+      SELECT 
+        sp.seeker_id,
+        sp.first_name,
+        sp.last_name,
+        sp.seeker_profile_created_at AS profile_created,
+        MIN(r.referral_date) AS first_referral,
+        MAX(r.referral_date) AS last_referral,
+        COUNT(r.id_referrals) AS referral_count,
+        COUNT(DISTINCT r.program_numeric_id) AS program_count
+      FROM seeker_profiles sp
+      LEFT JOIN referrals r ON sp.seeker_id = r.seeker_id
+        AND r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+      WHERE sp.seeker_profile_created_at BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY sp.seeker_id, sp.first_name, sp.last_name, sp.seeker_profile_created_at
+      HAVING COUNT(r.id_referrals) > 0
+      ORDER BY referral_count DESC
+      LIMIT 50
+    row_limit: 100
+    description: "Top seekers by referral activity"
+
+# Development settings
+development:
+  hot_reload: true

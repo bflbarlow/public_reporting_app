@@ -1,0 +1,144 @@
+# Report Template - Starting point for new reports
+# =================================================
+# Copy this directory and rename to your report ID (e.g., reports/my_new_report/)
+# Then customize this file for your specific report.
+
+# Basic Report Information
+# -----------------------
+id: report_template                    # Unique identifier (must match directory name)
+name: "Report Template"                # Display name shown in UI
+description: "A template for creating new reports with the thick client"
+database: default                      # Database connection from databases.yaml
+visibility: public                     # "public" or "private"
+expires_after: 3600                    # URL expiration in seconds (1 hour)
+max_rows: 10000                        # Maximum rows returned per datasource
+
+# Parameter Configuration
+# -----------------------
+# Immutable parameters: Included in HMAC signature for security
+# These CANNOT be changed by users once URL is signed
+# Typically includes: organization_id, user_id, tenant_id, etc.
+immutable_params:
+  - organization_id                    # REQUIRED for data isolation
+  
+# Mutable parameters: Can be changed by users via UI
+# These are NOT included in HMAC signature
+# Typically includes: date ranges, filter options, etc.
+mutable_params:
+  - start_date                         # Common: start date for date range filters
+  - end_date                           # Common: end date for date range filters
+  # Add your mutable parameters here:
+  # - status
+  # - category
+  # - region
+
+# Datasources (SQL Queries)
+# -------------------------
+# Each datasource will be available in the thick client response
+# Use {{parameter_name}} syntax for parameter substitution
+datasources:
+  
+  # Example: Summary statistics
+  data_summary:
+    sql: |
+      -- ALWAYS include organization_id filter for data security
+      -- Use parameter placeholders {{parameter_name}} for dynamic values
+      SELECT 
+        COUNT(*) as total_records,
+        SUM(amount) as total_amount,
+        AVG(amount) as average_amount,
+        MIN(created_at) as first_record,
+        MAX(created_at) as last_record
+      FROM your_table
+      WHERE organization_id = {{organization_id}}
+        -- Always filter by date range if using date parameters
+        AND created_at BETWEEN {{start_date}} AND {{end_date}}
+      -- Consider adding row_limit for performance
+    row_limit: 100                     # Maximum rows returned (0 = use default)
+    cache_ttl: 300                     # Cache duration in seconds (0 = no caching)
+    description: "Summary statistics for the selected date range"
+  
+  # Example: Time series data
+  time_series:
+    sql: |
+      SELECT 
+        DATE(created_at) as date,
+        COUNT(*) as daily_count,
+        SUM(amount) as daily_total
+      FROM your_table
+      WHERE organization_id = {{organization_id}}
+        AND created_at BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY DATE(created_at)
+      ORDER BY date
+    row_limit: 1000
+    cache_ttl: 600                     # Cache for 10 minutes
+    description: "Daily aggregates for charting"
+  
+  # Example: Category breakdown
+  category_breakdown:
+    sql: |
+      SELECT 
+        category,
+        COUNT(*) as count,
+        SUM(amount) as total_amount,
+        AVG(amount) as average_amount
+      FROM your_table
+      WHERE organization_id = {{organization_id}}
+        AND created_at BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY category
+      ORDER BY total_amount DESC
+    row_limit: 50
+    description: "Breakdown by category for pie/bar charts"
+  
+  # Example: Top items list
+  top_items:
+    sql: |
+      SELECT 
+        item_name,
+        item_id,
+        COUNT(*) as transaction_count,
+        SUM(amount) as revenue
+      FROM your_table
+      WHERE organization_id = {{organization_id}}
+        AND created_at BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY item_id, item_name
+      ORDER BY revenue DESC
+      LIMIT 20                         # Using LIMIT for performance
+    row_limit: 50                      # Additional safety with row_limit
+    description: "Top 20 items by revenue"
+
+# Best Practices Guide
+# ====================
+#
+# 1. SECURITY:
+#    - ALWAYS include organization_id = {{organization_id}} in WHERE clause
+#    - For JOINs, add organization_id filter to each table
+#    - Never expose raw SQL in client-side code
+#
+# 2. PERFORMANCE:
+#    - Use appropriate indexes on organization_id, date columns
+#    - Set row_limit to reasonable values (default 10000)
+#    - Use cache_ttl for frequently accessed, slow-changing data
+#    - Consider pagination for large datasets (>1000 rows)
+#
+# 3. PARAMETER USAGE:
+#    - All parameters referenced in SQL must be declared above
+#    - Immutable parameters: For security & data isolation
+#    - Mutable parameters: For user-adjustable filters
+#
+# 4. ERROR HANDLING:
+#    - Test queries with NULL/empty parameter values
+#    - Ensure date ranges are valid (start_date <= end_date)
+#    - Handle missing data gracefully in dashboard.html
+#
+# 5. TESTING:
+#    - Generate test URL: go run main.go -genurl -report report_template -params "organization_id=1,start_date=2024-01-01,end_date=2024-12-31"
+#    - Test with ENABLE_PUBLIC_PATHS=true for development
+#    - Verify data isolation by changing organization_id
+#
+# Next Steps:
+# 1. Copy this directory: cp -r reports/report_template reports/my_new_report
+# 2. Update id, name, description in report.yaml
+# 3. Replace SQL queries with your actual queries
+# 4. Update dashboard.html with your visualizations
+# 5. Test your report thoroughly

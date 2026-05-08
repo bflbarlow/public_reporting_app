@@ -1,0 +1,48 @@
+id: example_dashboard
+name: "Example Dashboard"
+description: "A simple example report to test the new architecture"
+database: default
+visibility: public
+expires_after: 3600  # 1 hour
+max_rows: 10000
+
+# Immutable parameters (included in HMAC signature)
+immutable_params:
+  - organization_id
+  - user_id
+
+# Mutable parameters (can be changed by user)
+mutable_params:
+  - start_date
+  - end_date
+  - status
+
+# Datasources (SQL queries)
+datasources:
+  sales_summary:
+    sql: |
+      SELECT COUNT(*) as total_orders, SUM(amount) as total_revenue
+      FROM orders
+      WHERE organization_id = {{organization_id}}
+        AND order_date BETWEEN {{start_date}} AND {{end_date}}
+    row_limit: 100
+    cache_ttl: 300  # 5 minutes
+    
+  daily_sales:
+    sql: |
+      SELECT DATE(order_date) as day, COUNT(*) as orders, SUM(amount) as revenue
+      FROM orders
+      WHERE organization_id = {{organization_id}}
+        AND order_date BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY DATE(order_date)
+      ORDER BY day
+    row_limit: 1000
+    
+  status_breakdown:
+    sql: |
+      SELECT status, COUNT(*) as count
+      FROM orders
+      WHERE organization_id = {{organization_id}}
+        AND order_date BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY status
+    row_limit: 100

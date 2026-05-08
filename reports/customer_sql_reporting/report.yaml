@@ -1,0 +1,219 @@
+# Customer SQL Reporting - Advanced Visual Analytics Dashboard
+# ==============================================================
+# Interactive dashboard with Plotly.js featuring unique visualizations:
+# - Sankey diagrams for customer journey flow
+# - Sunburst charts for hierarchical data
+# - Parallel coordinates for multidimensional analysis
+# - 3D scatter plots for complex relationships
+
+# Basic Report Information
+# -----------------------
+id: customer_sql_reporting              # Unique identifier (must match directory name)
+name: "Customer Journey Analytics"      # Display name shown in UI
+description: "Advanced visual analytics of customer journeys from assessment to outcomes using interactive Plotly.js visualizations"
+database: customer_sql                  # Customer database from databases.yaml
+visibility: public                      # "public" or "private"
+expires_after: 3600                     # URL expiration in seconds (1 hour)
+max_rows: 10000                         # Maximum rows returned per datasource
+
+# Parameter Configuration
+# -----------------------
+# Immutable parameters: Included in HMAC signature for security
+# These CANNOT be changed by users once URL is signed
+# Typically includes: organization_id, user_id, tenant_id, etc.
+immutable_params:
+  - organization_id                    # REQUIRED for data isolation
+  
+# Mutable parameters: Can be changed by users via UI
+# These are NOT included in HMAC signature
+# Typically includes: date ranges, filter options, etc.
+mutable_params:
+  - start_date                         # Start date for date range filters
+  - end_date                           # End date for date range filters
+  - domain_filter                      # Optional: Filter by assessment domain
+  - program_category                   # Optional: Filter by program category
+  - referral_status_filter             # Optional: Filter by referral status
+
+# Datasources (SQL Queries)
+# -------------------------
+# Each datasource will be available in the thick client response
+# Use {{parameter_name}} syntax for parameter substitution
+datasources:
+  
+  # Customer Journey Sankey Diagram Data
+  # Source -> Assessment -> Referral -> Program -> Outcome flow
+  journey_sankey:
+    sql: |
+      WITH journey_steps AS (
+        -- Step 1: Assessments as starting point
+        SELECT
+          'Assessment' AS source,
+          COALESCE(NULLIF(a.domains, ''), 'No Domain') AS target,
+          COUNT(*) AS value,
+          COALESCE(NULLIF(a.domains, ''), 'No Domain') AS label
+        FROM assessments a
+        WHERE a.created_at BETWEEN {{start_date}} AND {{end_date}}
+          AND ({{domain_filter}} IS NULL OR a.domains = {{domain_filter}})
+        GROUP BY COALESCE(NULLIF(a.domains, ''), 'No Domain')
+        
+        UNION ALL
+        
+        -- Step 2: Assessments to Referrals
+        SELECT
+          COALESCE(NULLIF(a.domains, ''), 'No Domain') AS source,
+          COALESCE(p.categories, 'Uncategorized') AS target,
+          COUNT(DISTINCT r.id_referrals) AS value,
+          COALESCE(p.categories, 'Uncategorized') AS label
+        FROM assessments a
+        LEFT JOIN referrals r ON a.form_submission_id = r.form_submission_id
+        LEFT JOIN programs p ON r.program_numeric_id = p.program_numeric_id
+        WHERE a.created_at BETWEEN {{start_date}} AND {{end_date}}
+          AND r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+          AND ({{domain_filter}} IS NULL OR a.domains = {{domain_filter}})
+          AND ({{program_category}} IS NULL OR p.categories LIKE CONCAT('%', {{program_category}}, '%'))
+        GROUP BY COALESCE(NULLIF(a.domains, ''), 'No Domain'), COALESCE(p.categories, 'Uncategorized')
+        
+        UNION ALL
+        
+        -- Step 3: Referrals to Outcomes (status)
+        SELECT
+          COALESCE(p.categories, 'Uncategorized') AS source,
+          COALESCE(r.referral_status, 'No Status') AS target,
+          COUNT(*) AS value,
+          COALESCE(r.referral_status, 'No Status') AS label
+        FROM referrals r
+        LEFT JOIN programs p ON r.program_numeric_id = p.program_numeric_id
+        WHERE r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+          AND ({{program_category}} IS NULL OR p.categories LIKE CONCAT('%', {{program_category}}, '%'))
+          AND ({{referral_status_filter}} IS NULL OR r.referral_status = {{referral_status_filter}})
+        GROUP BY COALESCE(p.categories, 'Uncategorized'), COALESCE(r.referral_status, 'No Status')
+      )
+      SELECT * FROM journey_steps
+      WHERE value > 0
+    row_limit: 500
+    cache_ttl: 300
+    description: "Customer journey flow data for Sankey diagram visualization"
+  
+  # Hierarchical Sunburst Data: Domain -> Program Category -> Program -> Status
+  sunburst_hierarchy:
+    sql: |
+      WITH hierarchical_data AS (
+        SELECT
+          COALESCE(NULLIF(a.domains, ''), 'No Domain') AS level1,
+          COALESCE(p.categories, 'Uncategorized') AS level2,
+          COALESCE(p.program_name, 'Unknown Program') AS level3,
+          COALESCE(r.referral_status, 'No Status') AS level4,
+          COUNT(DISTINCT r.id_referrals) AS value,
+          COUNT(DISTINCT a.seeker_id) AS unique_seekers
+        FROM assessments a
+        LEFT JOIN referrals r ON a.form_submission_id = r.form_submission_id
+          AND r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+        LEFT JOIN programs p ON r.program_numeric_id = p.program_numeric_id
+        WHERE a.created_at BETWEEN {{start_date}} AND {{end_date}}
+          AND ({{domain_filter}} IS NULL OR a.domains = {{domain_filter}})
+          AND ({{program_category}} IS NULL OR p.categories LIKE CONCAT('%', {{program_category}}, '%'))
+          AND ({{referral_status_filter}} IS NULL OR r.referral_status = {{referral_status_filter}})
+        GROUP BY
+          COALESCE(NULLIF(a.domains, ''), 'No Domain'),
+          COALESCE(p.categories, 'Uncategorized'),
+          COALESCE(p.program_name, 'Unknown Program'),
+          COALESCE(r.referral_status, 'No Status')
+      )
+      SELECT
+        level1, level2, level3, level4, value, unique_seekers,
+        CONCAT(level1, '|', level2, '|', level3, '|', level4) AS hierarchy_path
+      FROM hierarchical_data
+      WHERE value > 0
+      ORDER BY value DESC
+    row_limit: 300
+    description: "Hierarchical data for sunburst chart visualization"
+  
+  # Parallel Coordinates Data: Multi-dimensional seeker attributes
+  parallel_coordinates:
+    sql: |
+      SELECT
+        a.seeker_id,
+        COUNT(DISTINCT a.id_assessments) AS assessment_count,
+        COUNT(DISTINCT r.id_referrals) AS referral_count,
+        COUNT(DISTINCT g.goal_id) AS goal_count,
+        COUNT(DISTINCT p.program_numeric_id) AS program_count,
+        AVG(a.answer_score) AS avg_assessment_score,
+        MAX(CASE WHEN r.referral_status = 'Completed' THEN 1 ELSE 0 END) AS has_completed_referral,
+        COUNT(DISTINCT a.domains) AS domain_count,
+        DATEDIFF(MAX(r.referral_date), MIN(a.created_at)) AS journey_duration_days
+      FROM assessments a
+      LEFT JOIN referrals r ON a.form_submission_id = r.form_submission_id
+        AND r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+      LEFT JOIN goals g ON a.form_submission_id = g.goal_form_submission_id
+      LEFT JOIN programs p ON r.program_numeric_id = p.program_numeric_id
+      WHERE a.created_at BETWEEN {{start_date}} AND {{end_date}}
+        AND ({{domain_filter}} IS NULL OR a.domains = {{domain_filter}})
+        AND ({{program_category}} IS NULL OR p.categories LIKE CONCAT('%', {{program_category}}, '%'))
+        AND ({{referral_status_filter}} IS NULL OR r.referral_status = {{referral_status_filter}})
+      GROUP BY a.seeker_id
+      HAVING COUNT(DISTINCT a.id_assessments) > 0
+      ORDER BY assessment_count DESC
+    row_limit: 200
+    description: "Multi-dimensional seeker data for parallel coordinates plot"
+  
+  # 3D Scatter Plot: Time vs Complexity vs Outcome
+  scatter_3d:
+    sql: |
+      SELECT
+        DATE(a.created_at) AS assessment_date,
+        COUNT(DISTINCT a.question_unique_id) AS question_complexity,
+        COUNT(DISTINCT a.domains) AS domain_count,
+        AVG(a.answer_score) AS avg_score,
+        COUNT(DISTINCT r.id_referrals) AS referral_count,
+        MAX(CASE WHEN r.referral_status = 'Completed' THEN 1 ELSE 0 END) AS completion_rate,
+        COUNT(DISTINCT p.program_numeric_id) AS program_diversity,
+        COUNT(DISTINCT a.seeker_id) AS seeker_count
+      FROM assessments a
+      LEFT JOIN referrals r ON a.form_submission_id = r.form_submission_id
+        AND r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+      LEFT JOIN programs p ON r.program_numeric_id = p.program_numeric_id
+      WHERE a.created_at BETWEEN {{start_date}} AND {{end_date}}
+        AND ({{domain_filter}} IS NULL OR a.domains = {{domain_filter}})
+        AND ({{program_category}} IS NULL OR p.categories LIKE CONCAT('%', {{program_category}}, '%'))
+      GROUP BY DATE(a.created_at)
+      HAVING COUNT(DISTINCT a.id_assessments) > 0
+      ORDER BY assessment_date
+    row_limit: 100
+    cache_ttl: 600
+    description: "3D scatter plot data: time, complexity, and outcome metrics"
+
+# Best Practices Guide
+# ====================
+#
+# 1. SECURITY:
+#    - ALWAYS include organization_id = {{organization_id}} in WHERE clause
+#    - For JOINs, add organization_id filter to each table
+#    - Never expose raw SQL in client-side code
+#
+# 2. PERFORMANCE:
+#    - Use appropriate indexes on organization_id, date columns
+#    - Set row_limit to reasonable values (default 10000)
+#    - Use cache_ttl for frequently accessed, slow-changing data
+#    - Consider pagination for large datasets (>1000 rows)
+#
+# 3. PARAMETER USAGE:
+#    - All parameters referenced in SQL must be declared above
+#    - Immutable parameters: For security & data isolation
+#    - Mutable parameters: For user-adjustable filters
+#
+# 4. ERROR HANDLING:
+#    - Test queries with NULL/empty parameter values
+#    - Ensure date ranges are valid (start_date <= end_date)
+#    - Handle missing data gracefully in dashboard.html
+#
+# 5. TESTING:
+#    - Generate test URL: go run main.go -genurl -report report_template -params "organization_id=1,start_date=2024-01-01,end_date=2024-12-31"
+#    - Test with ENABLE_PUBLIC_PATHS=true for development
+#    - Verify data isolation by changing organization_id
+#
+# Next Steps:
+# 1. Copy this directory: cp -r reports/report_template reports/my_new_report
+# 2. Update id, name, description in report.yaml
+# 3. Replace SQL queries with your actual queries
+# 4. Update dashboard.html with your visualizations
+# 5. Test your report thoroughly

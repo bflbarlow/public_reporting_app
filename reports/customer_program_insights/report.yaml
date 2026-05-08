@@ -1,0 +1,86 @@
+# Customer Program Insights Dashboard using D3.js
+id: customer_program_insights
+name: "Program Insights Dashboard"
+description: "Advanced program analytics and visualizations"
+database: customer_sql
+visibility: public
+expires_after: 3600
+max_rows: 10000
+
+# Immutable parameters (included in HMAC signature)
+immutable_params:
+  - organization_id
+
+# Mutable parameters (can be changed by user)
+mutable_params:
+  - start_date
+  - end_date
+
+# Datasources - named SQL queries
+datasources:
+  # Program enrollment trends
+  program_enrollment:
+    sql: |
+      SELECT p.program_name,
+             p.categories,
+             p.program_published_status,
+             COUNT(DISTINCT r.seeker_id) AS unique_enrollments,
+             COUNT(r.id_referrals) AS total_referrals,
+             AVG(CASE WHEN r.referral_status = 'Completed' THEN 1 ELSE 0 END) * 100 AS completion_rate,
+             COUNT(DISTINCT r.sender_user_id) AS unique_senders
+      FROM referrals r
+      LEFT JOIN programs p ON r.program_numeric_id = p.program_numeric_id
+      WHERE r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY p.program_name, p.categories, p.program_published_status
+      HAVING COUNT(r.id_referrals) > 0
+      ORDER BY unique_enrollments DESC
+    row_limit: 100
+    description: "Program enrollment and performance metrics"
+
+  # Monthly enrollment trends
+  enrollment_trends:
+    sql: |
+      SELECT DATE_FORMAT(r.referral_date, '%Y-%m') AS month,
+             COUNT(DISTINCT r.seeker_id) AS new_enrollments,
+             COUNT(r.id_referrals) AS total_activity,
+             COUNT(DISTINCT CASE WHEN r.referral_status = 'Completed' THEN r.seeker_id END) AS completed_enrollments
+      FROM referrals r
+      LEFT JOIN programs p ON r.program_numeric_id = p.program_numeric_id
+      WHERE r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY DATE_FORMAT(r.referral_date, '%Y-%m')
+      ORDER BY month
+    cache_ttl: 300
+    description: "Monthly enrollment trends and activity"
+
+  # Program category analysis
+  category_analysis:
+    sql: |
+      SELECT COALESCE(NULLIF(p.categories, ''), 'Uncategorized') AS category,
+             COUNT(DISTINCT r.seeker_id) AS unique_enrollments,
+             COUNT(r.id_referrals) AS total_referrals,
+             AVG(CASE WHEN r.referral_status = 'Completed' THEN 1 ELSE 0 END) * 100 AS completion_rate,
+             COUNT(DISTINCT p.program_name) AS program_count
+      FROM referrals r
+      LEFT JOIN programs p ON r.program_numeric_id = p.program_numeric_id
+      WHERE r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY COALESCE(NULLIF(p.categories, ''), 'Uncategorized')
+      HAVING COUNT(r.id_referrals) > 0
+      ORDER BY unique_enrollments DESC
+    cache_ttl: 600
+    description: "Analysis of program categories"
+
+  # Goal completion by program
+  goal_completion:
+    sql: |
+      SELECT p.program_name,
+             g.goal_status,
+             COUNT(g.goal_id) AS goal_count,
+             AVG(CASE WHEN g.goal_status = 'Completed' THEN 1 WHEN g.goal_status = 'In Progress' THEN 0.5 ELSE 0 END) * 100 AS progress_score
+      FROM goals g
+      LEFT JOIN programs p ON SUBSTRING_INDEX(g.goal_group_key, '-', 1) + 0 = p.program_numeric_id
+      WHERE g.goal_created_at BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY p.program_name, g.goal_status
+      HAVING COUNT(g.goal_id) > 0
+      ORDER BY p.program_name, goal_count DESC
+    row_limit: 200
+    description: "Goal completion status by program"

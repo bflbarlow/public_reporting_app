@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Referral Analytics - Chart.js Dashboard</title>
+    <!-- Load Chart.js from CDN (specified in manifest) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Load Thick Client for datasource-based reporting -->
+    <script src="/static/thick_client.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            padding: 20px;
+            background-color: #f8f8f8;
+        }
+        .dashboard {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+        .header p {
+            color: #7f8c8d;
+            margin-bottom: 20px;
+        }
+
+        .charts-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(550px, 1fr));
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+        .chart-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            height: 400px;
+        }
+        .chart-title {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 16px;
+            font-size: 18px;
+        }
+        .chart-container {
+            height: 320px;
+            position: relative;
+        }
+        canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 320px;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+        .no-data-message {
+            display: none; /* Initially hidden, shown via JS */
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            color: #7f8c8d;
+            font-style: italic;
+            background: rgba(255, 255, 255, 0.9);
+            z-index: 10;
+            text-align: center;
+            padding-top: 140px; /* Roughly vertical center */
+            box-sizing: border-box;
+        }
+
+        .data-table {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-top: 24px;
+            overflow-x: auto;
+        }
+        .data-table h3 {
+            margin-bottom: 16px;
+            color: #2c3e50;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #e9ecef;
+        }
+        th {
+            background-color: #f8f8f8;
+            font-weight: 600;
+            color: #495057;
+        }
+        tr:hover {
+            background-color: #f0f0f0;
+        }
+        /* Filter styles */
+        .filters-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .filter-group label {
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: #2c3e50;
+        }
+        .filter-group input, .filter-group select {
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .filter-group input:focus, .filter-group select:focus {
+            outline: none;
+            border-color: #3a70a0;
+            box-shadow: 0 0 0 2px rgba(58, 112, 160, 0.2);
+        }
+        .filter-buttons {
+            display: flex;
+            gap: 12px;
+            align-items: end;
+        }
+        .apply-btn {
+            background: #3a70a0;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            font-weight: 500;
+            cursor: pointer;
+            align-self: end;
+        }
+        .apply-btn:hover {
+            background: #23527c;
+        }
+        .apply-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .reset-btn {
+            background: #95a5a6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            font-weight: 500;
+            cursor: pointer;
+            align-self: end;
+        }
+        .reset-btn:hover {
+            background: #666;
+        }
+        /* Per-chart loading indicator (replaces full-page overlay) */
+        .chart-loading {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.85);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 5;
+            border-radius: 4px;
+        }
+        .chart-loading.active {
+            display: flex;
+        }
+        .chart-loading .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3a70a0;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #fceceb;
+            color: #bc473a;
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin: 16px 0;
+            border-left: 4px solid #d14232;
+            display: none;
+        }
+
+        /* Stats panel */
+        .stats-panel {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stats-panel h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #eee;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+            border-radius: 8px;
+            background: #f8f8f8;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #3a70a0;
+            margin-bottom: 8px;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .stat-change {
+            font-size: 12px;
+            margin-top: 4px;
+        }
+        .stat-change.positive {
+            color: #3c763d;
+        }
+        .stat-change.negative {
+            color: #bc473a;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h1>Customer Referral Analytics Dashboard - Charts.js</h1>
+            <p>Interactive referrals analytics with Charts.js</p>
+            <div class="plotly-note">
+                Charts.js provides simple yet flexible JavaScript charting library for the modern web
+
+            </div>
+        </div>
+
+
+
+        <div class="filters-container">
+            <div class="filter-group">
+                <label for="start-date">Start Date</label>
+                <input type="date" id="start-date">
+            </div>
+            
+            <div class="filter-group">
+                <label for="end-date">End Date</label>
+                <input type="date" id="end-date">
+            </div>
+            
+            <div class="filter-buttons">
+                <button class="reset-btn" id="reset-filters">Reset</button>
+                <button class="apply-btn" id="apply-filters">Apply Filters</button>
+            </div>
+        </div>
+
+        <div class="error-message" id="error-message"></div>
+
+        <div class="stats-panel" id="stats-panel">
+            <h3>Key Metrics</h3>
+            <div class="stats-grid" id="stats-grid">
+                <!-- Stats will be populated dynamically -->
+                <div class="stat-item">
+                    <div class="stat-value" id="total-referrals">--</div>
+                    <div class="stat-label">Total Referrals</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="completed-referrals">--</div>
+                    <div class="stat-label">Completed</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="completion-rate">--</div>
+                    <div class="stat-label">Completion Rate</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="unique-seekers">--</div>
+                    <div class="stat-label">Unique Seekers</div>
+                </div>
+            </div>
+        </div>
+
+
+
+        <div class="charts-container">
+            <div class="chart-card" id="card-dailyTrends">
+                <div class="chart-title">Daily Referral Trends</div>
+                <div class="chart-container" id="container-dailyTrends">
+                    <canvas id="dailyTrendsChart"></canvas>
+                    <div class="chart-loading" id="loading-dailyTrends"><div class="spinner"></div></div>
+                </div>
+            </div>
+            <div class="chart-card" id="card-statusDistribution">
+                <div class="chart-title">Referral Status Distribution</div>
+                <div class="chart-container" id="container-statusDistribution">
+                    <canvas id="statusDistributionChart"></canvas>
+                    <div class="chart-loading" id="loading-statusDistribution"><div class="spinner"></div></div>
+                </div>
+            </div>
+            <div class="chart-card" id="card-contactMethod">
+                <div class="chart-title">Contact Method Analysis</div>
+                <div class="chart-container" id="container-contactMethod">
+                    <canvas id="contactMethodChart"></canvas>
+                    <div class="chart-loading" id="loading-contactMethod"><div class="spinner"></div></div>
+                </div>
+            </div>
+            <div class="chart-card" id="card-monthlySummary">
+                <div class="chart-title">Monthly Summary</div>
+                <div class="chart-container" id="container-monthlySummary">
+                    <canvas id="monthlySummaryChart"></canvas>
+                    <div class="chart-loading" id="loading-monthlySummary"><div class="spinner"></div></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="data-table">
+            <h3>Monthly Summary Data</h3>
+            <table id="monthlyTable">
+                <thead>
+                    <tr>
+                        <th>Month</th>
+                        <th>Total Referrals</th>
+                        <th>Unique Seekers</th>
+                        <th>Unique Senders</th>
+                        <th>Completed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td colspan="5">Waiting for data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // SIMPLE, ROBUST DASHBOARD IMPLEMENTATION
+        // This avoids complex error handling and template bug workarounds
+        
+        // Global state
+        const state = {
+            charts: {
+                dailyTrends: null,
+                statusDistribution: null,
+                contactMethod: null,
+                monthlySummary: null
+            },
+            data: {
+                daily_trends: { rows: [] },
+                status_distribution: { rows: [] },
+                contact_method_analysis: { rows: [] },
+                monthly_summary: { rows: [] },
+                unique_seekers_count: { rows: [] }
+            },
+            filters: {}
+        };
+
+        // Initialize the dashboard
+        function initDashboard() {
+            console.log('Initializing dashboard...');
+            
+            // Setup error handling
+            setupErrorHandling();
+            
+            // Initialize filter values from current URL parameters
+            initFilters();
+            
+            // Setup event listeners
+            setupEventListeners();
+            
+            // Load initial data
+            loadData();
+        }
+
+        function setupErrorHandling() {
+            // Prevent unhandled errors from breaking the dashboard
+            window.addEventListener('error', function(event) {
+                console.error('Dashboard error:', event.error || event.message);
+                event.preventDefault();
+            });
+            
+            window.addEventListener('unhandledrejection', function(event) {
+                console.error('Unhandled promise rejection:', event.reason);
+                event.preventDefault();
+            });
+        }
+
+        function initFilters() {
+            // Get current parameters from the report config
+            const config = window.ReportConfig || {};
+            // Handle params as JSON string or object
+            let params = {};
+            if (config.params) {
+                if (typeof config.params === 'string') {
+                    try {
+                        params = JSON.parse(config.params);
+                    } catch (e) {
+                        console.error('Failed to parse params JSON:', e);
+                        params = {};
+                    }
+                } else {
+                    params = config.params;
+                }
+            }
+            
+            // Set filter values
+            if (params.start_date) {
+                document.getElementById('start-date').value = params.start_date;
+            }
+            
+            if (params.end_date) {
+                document.getElementById('end-date').value = params.end_date;
+            }
+            
+            // Initialize state.filters with current parameters
+            state.filters = {
+                start_date: params.start_date || '',
+                end_date: params.end_date || ''
+            };
+            
+            // Note: referral_status and contact_method are deprecated but kept in state
+            // for compatibility with existing URLs that may contain these parameters
+        }
+
+        function updateFilterState() {
+            state.filters = {
+                start_date: document.getElementById('start-date').value,
+                end_date: document.getElementById('end-date').value
+            };
+        }
+
+        function setupEventListeners() {
+            // Apply filters button
+            document.getElementById('apply-filters').addEventListener('click', () => {
+                updateFilterState();
+                loadData();
+            });
+            
+            // Reset filters button
+            document.getElementById('reset-filters').addEventListener('click', () => {
+                // Reset to original parameters
+                const config = window.ReportConfig || {};
+                // Handle params as JSON string or object
+                let params = {};
+                if (config.params) {
+                    if (typeof config.params === 'string') {
+                        try {
+                            params = JSON.parse(config.params);
+                        } catch (e) {
+                            console.error('Failed to parse params JSON:', e);
+                            params = {};
+                        }
+                    } else {
+                        params = config.params;
+                    }
+                }
+                
+                document.getElementById('start-date').value = params.start_date || '';
+                document.getElementById('end-date').value = params.end_date || '';
+                
+                // Reset all filter values including deprecated ones
+                state.filters = {
+                    start_date: params.start_date || '',
+                    end_date: params.end_date || ''
+                };
+                
+                loadData();
+            });
+            
+            // Enter key in filter inputs
+            const filterInputs = document.querySelectorAll('.filters-container input, .filters-container select');
+            filterInputs.forEach(input => {
+                input.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        updateFilterState();
+                        loadData();
+                    }
+                });
+            });
+            
+            // Auto-refresh on filter changes (with debounce)
+            let debounceTimer;
+            const startDateInput = document.getElementById('start-date');
+            const endDateInput = document.getElementById('end-date');
+            
+            function scheduleFilterUpdate() {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    // Validate before updating
+                    const startVal = startDateInput.value;
+                    const endVal = endDateInput.value;
+                    
+                    // Basic validation: if both dates set, start must be <= end
+                    if (startVal && endVal && startVal > endVal) {
+                        showError('Start date must be before end date.');
+                        return;
+                    }
+                    
+                    updateFilterState();
+                    loadData();
+                }, 300); // 300ms debounce
+            }
+            
+            // Listen for changes on date inputs (change only, NOT input)
+            // Using 'input' would trigger a refresh on every keystroke which is excessive
+            startDateInput.addEventListener('change', scheduleFilterUpdate);
+            endDateInput.addEventListener('change', scheduleFilterUpdate);
+        }
+
+        async function loadData() {
+            console.log('Loading data with filters:', state.filters);
+            
+            const errorEl = document.getElementById('error-message');
+            const applyBtn = document.getElementById('apply-filters');
+            
+            // Show per-chart loading indicators
+            showPerChartLoading(true);
+            
+            applyBtn.disabled = true;
+            errorEl.style.display = 'none';
+            
+            try {
+                // Validate date range if both dates are set
+                if (state.filters.start_date && state.filters.end_date) {
+                    if (state.filters.start_date > state.filters.end_date) {
+                        throw new Error('Start date must be before end date.');
+                    }
+                }
+                
+                // Ensure thick client is ready and has current URL
+                if (!window.ReportApp || !window.ReportApp.refresh) {
+                    throw new Error('Thick client not available. Ensure <script src="/static/thick_client.js"> is included.');
+                }
+                
+                // Thick client ready, load data
+                
+                // Try to load data via thick client
+                console.log('Using thick client to load data');
+                
+                // IMPORTANT: On first load, the thick client may not have currentUrl set.
+                // This happens when window.ReportConfig.currentUrl is not provided by the server.
+                // We need to handle this case gracefully.
+                try {
+                    const data = await window.ReportApp.refresh(state.filters);
+                    console.log('Data loaded via thick client:', Object.keys(data));
+                    
+                    // Update state with new data
+                    updateDataState(data);
+                    
+                    // Update the dashboard with new data
+                    updateDashboard();
+                } catch (thickClientError) {
+                    console.warn('Thick client refresh failed:', thickClientError);
+                    
+                    // Check if this is the "No current URL" error
+                    if (thickClientError.message && thickClientError.message.includes('current URL')) {
+                        console.log('First load detected - trying to use initial page data');
+                        
+                        // On first load, we should have data embedded in the page via window.__reportData or similar
+                        // Let's check for common data patterns
+                        if (window.__reportData) {
+                            console.log('Found window.__reportData, using embedded data');
+                            updateDataState(window.__reportData);
+                            updateDashboard();
+                        } else if (window.ReportConfig && window.ReportConfig.initialData) {
+                            console.log('Found window.ReportConfig.initialData, using embedded data');
+                            updateDataState(window.ReportConfig.initialData);
+                            updateDashboard();
+                        } else {
+                            // No embedded data, show message
+                            showError('First load: No embedded data available. Click "Reset" or "Apply Filters" to load data.');
+                        }
+                    } else {
+                        // Some other error, re-throw
+                        throw thickClientError;
+                    }
+                }
+                
+                showPerChartLoading(false);
+                
+            } catch (error) {
+                console.error('Error loading data:', error);
+                showError('Failed to load data: ' + error.message);
+                showPerChartLoading(false);
+            } finally {
+                applyBtn.disabled = false;
+            }
+        }
+
+        function updateDataState(newData) {
+            console.log('updateDataState called with:', newData);
+            // Update each datasource with new data or empty structure
+            const datasources = ['daily_trends', 'status_distribution', 'contact_method_analysis', 'monthly_summary', 'unique_seekers_count'];
+            datasources.forEach(dsName => {
+                if (newData && newData[dsName]) {
+                    console.log(`Setting ${dsName} data:`, newData[dsName]);
+                    console.log(`Rows for ${dsName}:`, newData[dsName].rows ? newData[dsName].rows.length : 'none');
+                    if (newData[dsName].rows && newData[dsName].rows.length > 0) {
+                        console.log(`First row for ${dsName}:`, newData[dsName].rows[0]);
+                        console.log(`Columns for ${dsName}:`, newData[dsName].columns);
+                    }
+                    state.data[dsName] = newData[dsName];
+                } else {
+                    console.log(`No data for ${dsName}, setting empty`);
+                    state.data[dsName] = { rows: [] };
+                }
+            });
+            console.log('state.data after update:', state.data);
+        }
+        
+        // Helper function to convert array rows to objects using column names
+        function rowArrayToObject(rowArray, columns) {
+            if (!rowArray || !columns) return {};
+            const obj = {};
+            columns.forEach((col, index) => {
+                if (index < rowArray.length) {
+                    obj[col] = rowArray[index];
+                }
+            });
+            return obj;
+        }
+
+        function updateDashboard() {
+            console.log('updateDashboard called');
+            try {
+                // Update charts
+                updateCharts();
+                
+                // Update data table
+                updateDataTable();
+                
+                // Update stats panel
+                updateStatsPanel();
+                
+            } catch (error) {
+                console.error('Error updating dashboard:', error);
+                showError('Error updating dashboard: ' + error.message);
+            }
+        }
+
+
+
+        function updateCharts() {
+            console.log('updateCharts called');
+            // Use Chart.js update() for smooth transitions instead of destroy/recreate
+            updateDailyTrendsChart();
+            updateStatusDistributionChart();
+            updateContactMethodChart();
+            updateMonthlySummaryChart();
+        }
+
+        function createDailyTrendsChart() {
+            // Initial chart creation (called once on init)
+            console.log('createDailyTrendsChart called');
+            const canvas = document.getElementById('dailyTrendsChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const data = state.data.daily_trends || { rows: [] };
+            
+            const noDataMsg = document.createElement('div');
+            noDataMsg.className = 'no-data-message';
+            noDataMsg.textContent = 'No data available';
+            canvas.parentElement.appendChild(noDataMsg);
+            
+            if (!data.rows || data.rows.length === 0) {
+                noDataMsg.style.display = 'block';
+                canvas.style.display = 'none';
+                return;
+            }
+            
+            noDataMsg.style.display = 'none';
+            canvas.style.display = 'block';
+            
+            const rowsAsObjects = data.rows.map(row => rowArrayToObject(row, data.columns));
+            const days = rowsAsObjects.map(row => row.day);
+            const totals = rowsAsObjects.map(row => row.total_referrals);
+            const completed = rowsAsObjects.map(row => row.completed || 0);
+            
+            state.charts.dailyTrends = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: days,
+                    datasets: [
+                        {
+                            label: 'Total Referrals',
+                            data: totals,
+                            borderColor: '#3a70a0',
+                            backgroundColor: 'rgba(58, 112, 160, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        },
+                        {
+                            label: 'Completed',
+                            data: completed,
+                            borderColor: '#3c763d',
+                            backgroundColor: 'rgba(60, 118, 61, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    plugins: { legend: { position: 'top' } },
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'Count' } }
+                    }
+                }
+            });
+        }
+
+        function updateDailyTrendsChart() {
+            if (!state.charts.dailyTrends) {
+                // Chart not yet created, fall back to initial creation
+                createDailyTrendsChart();
+                return;
+            }
+            const data = state.data.daily_trends || { rows: [] };
+            const noDataMsg = state.charts.dailyTrends.canvas.parentElement.querySelector('.no-data-message');
+            
+            if (!data.rows || data.rows.length === 0) {
+                noDataMsg.style.display = 'block';
+                state.charts.dailyTrends.canvas.style.display = 'none';
+                return;
+            }
+            
+            noDataMsg.style.display = 'none';
+            state.charts.dailyTrends.canvas.style.display = 'block';
+            
+            const rowsAsObjects = data.rows.map(row => rowArrayToObject(row, data.columns));
+            const days = rowsAsObjects.map(row => row.day);
+            const totals = rowsAsObjects.map(row => row.total_referrals);
+            const completed = rowsAsObjects.map(row => row.completed || 0);
+            
+            // Smooth update: Chart.js animates data changes
+            state.charts.dailyTrends.data.labels = days;
+            state.charts.dailyTrends.data.datasets[0].data = totals;
+            state.charts.dailyTrends.data.datasets[1].data = completed;
+            state.charts.dailyTrends.update('none'); // 'none' = no animation
+        }
+
+        function createStatusDistributionChart() {
+            console.log('createStatusDistributionChart called');
+            const canvas = document.getElementById('statusDistributionChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const data = state.data.status_distribution || { rows: [] };
+            
+            const noDataMsg = document.createElement('div');
+            noDataMsg.className = 'no-data-message';
+            noDataMsg.textContent = 'No data available';
+            canvas.parentElement.appendChild(noDataMsg);
+            
+            if (!data.rows || data.rows.length === 0) {
+                noDataMsg.style.display = 'block';
+                canvas.style.display = 'none';
+                return;
+            }
+            
+            noDataMsg.style.display = 'none';
+            canvas.style.display = 'block';
+            
+            const rowsAsObjects = data.rows.map(row => rowArrayToObject(row, data.columns));
+            const statuses = rowsAsObjects.map(row => row.referral_status || 'Unknown');
+            const counts = rowsAsObjects.map(row => row.count);
+            
+            state.charts.statusDistribution = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: statuses,
+                    datasets: [{
+                        data: counts,
+                        backgroundColor: ['#3a70a0', '#3c763d', '#bc473a', '#d14232', '#167e8e', '#33485e', '#7f8c8d', '#95a5a6']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    plugins: { legend: { position: 'right' } }
+                }
+            });
+        }
+
+        function updateStatusDistributionChart() {
+            if (!state.charts.statusDistribution) {
+                createStatusDistributionChart();
+                return;
+            }
+            const data = state.data.status_distribution || { rows: [] };
+            const noDataMsg = state.charts.statusDistribution.canvas.parentElement.querySelector('.no-data-message');
+            
+            if (!data.rows || data.rows.length === 0) {
+                noDataMsg.style.display = 'block';
+                state.charts.statusDistribution.canvas.style.display = 'none';
+                return;
+            }
+            
+            noDataMsg.style.display = 'none';
+            state.charts.statusDistribution.canvas.style.display = 'block';
+            
+            const rowsAsObjects = data.rows.map(row => rowArrayToObject(row, data.columns));
+            const statuses = rowsAsObjects.map(row => row.referral_status || 'Unknown');
+            const counts = rowsAsObjects.map(row => row.count);
+            
+            state.charts.statusDistribution.data.labels = statuses;
+            state.charts.statusDistribution.data.datasets[0].data = counts;
+            state.charts.statusDistribution.update('none');
+        }
+
+        function createContactMethodChart() {
+            console.log('createContactMethodChart called');
+            const canvas = document.getElementById('contactMethodChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const data = state.data.contact_method_analysis || { rows: [] };
+            
+            const noDataMsg = document.createElement('div');
+            noDataMsg.className = 'no-data-message';
+            noDataMsg.textContent = 'No data available';
+            canvas.parentElement.appendChild(noDataMsg);
+            
+            if (!data.rows || data.rows.length === 0) {
+                noDataMsg.style.display = 'block';
+                canvas.style.display = 'none';
+                return;
+            }
+            
+            noDataMsg.style.display = 'none';
+            canvas.style.display = 'block';
+            
+            const rowsAsObjects = data.rows.map(row => rowArrayToObject(row, data.columns));
+            const methods = rowsAsObjects.map(row => row.contact_method || 'Unknown');
+            const totals = rowsAsObjects.map(row => row.total);
+            const completionRates = rowsAsObjects.map(row => {
+                const rate = row.completion_rate;
+                if (typeof rate === 'string') return parseFloat(rate) || 0;
+                return Number(rate) || 0;
+            });
+            
+            state.charts.contactMethod = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: methods,
+                    datasets: [
+                        { label: 'Total Referrals', data: totals, backgroundColor: '#3a70a0', borderColor: '#23527c', borderWidth: 1 },
+                        { label: 'Completion Rate (%)', data: completionRates, backgroundColor: 'rgba(60, 118, 61, 0.5)', borderColor: '#3c763d', borderWidth: 1, type: 'line', yAxisID: 'y1' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'Total Referrals' } },
+                        y1: { type: 'linear', display: true, position: 'right', beginAtZero: true, max: 100, title: { display: true, text: 'Completion Rate (%)' }, grid: { drawOnChartArea: false } }
+                    }
+                }
+            });
+        }
+
+        function updateContactMethodChart() {
+            if (!state.charts.contactMethod) {
+                createContactMethodChart();
+                return;
+            }
+            const data = state.data.contact_method_analysis || { rows: [] };
+            const noDataMsg = state.charts.contactMethod.canvas.parentElement.querySelector('.no-data-message');
+            
+            if (!data.rows || data.rows.length === 0) {
+                noDataMsg.style.display = 'block';
+                state.charts.contactMethod.canvas.style.display = 'none';
+                return;
+            }
+            
+            noDataMsg.style.display = 'none';
+            state.charts.contactMethod.canvas.style.display = 'block';
+            
+            const rowsAsObjects = data.rows.map(row => rowArrayToObject(row, data.columns));
+            const methods = rowsAsObjects.map(row => row.contact_method || 'Unknown');
+            const totals = rowsAsObjects.map(row => row.total);
+            const completionRates = rowsAsObjects.map(row => {
+                const rate = row.completion_rate;
+                if (typeof rate === 'string') return parseFloat(rate) || 0;
+                return Number(rate) || 0;
+            });
+            
+            state.charts.contactMethod.data.labels = methods;
+            state.charts.contactMethod.data.datasets[0].data = totals;
+            state.charts.contactMethod.data.datasets[1].data = completionRates;
+            state.charts.contactMethod.update('none');
+        }
+
+        function createMonthlySummaryChart() {
+            console.log('createMonthlySummaryChart called');
+            const canvas = document.getElementById('monthlySummaryChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const data = state.data.monthly_summary || { rows: [] };
+            
+            const noDataMsg = document.createElement('div');
+            noDataMsg.className = 'no-data-message';
+            noDataMsg.textContent = 'No data available';
+            canvas.parentElement.appendChild(noDataMsg);
+            
+            if (!data.rows || data.rows.length === 0) {
+                noDataMsg.style.display = 'block';
+                canvas.style.display = 'none';
+                return;
+            }
+            
+            noDataMsg.style.display = 'none';
+            canvas.style.display = 'block';
+            
+            const rowsAsObjects = data.rows.map(row => rowArrayToObject(row, data.columns));
+            const months = rowsAsObjects.map(row => row.month);
+            const totals = rowsAsObjects.map(row => row.total_referrals);
+            const uniqueSeekers = rowsAsObjects.map(row => row.unique_seekers);
+            const completed = rowsAsObjects.map(row => row.completed || 0);
+            
+            state.charts.monthlySummary = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: months,
+                    datasets: [
+                        { label: 'Total Referrals', data: totals, borderColor: '#3a70a0', backgroundColor: 'rgba(58, 112, 160, 0.1)', tension: 0.4, yAxisID: 'y' },
+                        { label: 'Unique Seekers', data: uniqueSeekers, borderColor: '#167e8e', backgroundColor: 'rgba(22, 126, 142, 0.1)', tension: 0.4, yAxisID: 'y' },
+                        { label: 'Completed', data: completed, borderColor: '#3c763d', backgroundColor: 'rgba(60, 118, 61, 0.1)', tension: 0.4, yAxisID: 'y' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Count' } } }
+                }
+            });
+        }
+
+        function updateMonthlySummaryChart() {
+            if (!state.charts.monthlySummary) {
+                createMonthlySummaryChart();
+                return;
+            }
+            const data = state.data.monthly_summary || { rows: [] };
+            const noDataMsg = state.charts.monthlySummary.canvas.parentElement.querySelector('.no-data-message');
+            
+            if (!data.rows || data.rows.length === 0) {
+                noDataMsg.style.display = 'block';
+                state.charts.monthlySummary.canvas.style.display = 'none';
+                return;
+            }
+            
+            noDataMsg.style.display = 'none';
+            state.charts.monthlySummary.canvas.style.display = 'block';
+            
+            const rowsAsObjects = data.rows.map(row => rowArrayToObject(row, data.columns));
+            const months = rowsAsObjects.map(row => row.month);
+            const totals = rowsAsObjects.map(row => row.total_referrals);
+            const uniqueSeekers = rowsAsObjects.map(row => row.unique_seekers);
+            const completed = rowsAsObjects.map(row => row.completed || 0);
+            
+            state.charts.monthlySummary.data.labels = months;
+            state.charts.monthlySummary.data.datasets[0].data = totals;
+            state.charts.monthlySummary.data.datasets[1].data = uniqueSeekers;
+            state.charts.monthlySummary.data.datasets[2].data = completed;
+            state.charts.monthlySummary.update('none');
+        }
+
+        function updateDataTable() {
+            const data = state.data.monthly_summary || { rows: [] };
+            const tableBody = document.querySelector('#monthlyTable tbody');
+            
+            if (!data.rows || data.rows.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="5">No data available</td></tr>';
+                return;
+            }
+
+            // Convert array rows to objects using column names
+            const rowsAsObjects = data.rows.map(row => rowArrayToObject(row, data.columns));
+            
+            // Build new rows
+            const newHtml = rowsAsObjects.map(row => {
+                return `<tr>
+                    <td>${row.month || ''}</td>
+                    <td>${row.total_referrals || 0}</td>
+                    <td>${row.unique_seekers || 0}</td>
+                    <td>${row.unique_senders || 0}</td>
+                    <td>${row.completed || 0}</td>
+                </tr>`;
+            }).join('');
+            
+            // Use requestAnimationFrame for smooth DOM update
+            requestAnimationFrame(() => {
+                tableBody.innerHTML = newHtml;
+            });
+        }
+
+        function updateStatsPanel() {
+            try {
+                const dailyData = state.data.daily_trends || { rows: [] };
+                const uniqueSeekersData = state.data.unique_seekers_count || { rows: [] };
+                
+                let totalReferrals = 0;
+                let completedReferrals = 0;
+                
+                if (dailyData.rows && dailyData.rows.length > 0) {
+                    // Convert array rows to objects using column names
+                    const dailyRowsAsObjects = dailyData.rows.map(row => rowArrayToObject(row, dailyData.columns));
+                    dailyRowsAsObjects.forEach(row => {
+                        totalReferrals += Number(row.total_referrals) || 0;
+                        completedReferrals += Number(row.completed) || 0;
+                    });
+                }
+                
+                const completionRate = totalReferrals > 0 ? (completedReferrals / totalReferrals * 100).toFixed(1) : 0;
+                
+                let uniqueSeekers = 0;
+                if (uniqueSeekersData.rows && uniqueSeekersData.rows.length > 0) {
+                    // Convert array rows to objects using column names
+                    const uniqueSeekersRows = uniqueSeekersData.rows.map(row => rowArrayToObject(row, uniqueSeekersData.columns));
+                    uniqueSeekersRows.forEach(row => {
+                        uniqueSeekers += Number(row.unique_seekers) || 0;
+                    });
+                }
+                
+                document.getElementById('total-referrals').textContent = totalReferrals.toLocaleString();
+                document.getElementById('completed-referrals').textContent = completedReferrals.toLocaleString();
+                document.getElementById('completion-rate').textContent = `${completionRate}%`;
+                document.getElementById('unique-seekers').textContent = uniqueSeekers.toLocaleString();
+                
+            } catch (error) {
+                console.error('Error updating stats panel:', error);
+            }
+        }
+
+        // Per-chart loading indicators (replaces full-page overlay)
+        function showPerChartLoading(show) {
+            const chartNames = ['dailyTrends', 'statusDistribution', 'contactMethod', 'monthlySummary'];
+            chartNames.forEach(name => {
+                const loader = document.getElementById('loading-' + name);
+                if (loader) {
+                    loader.classList.toggle('active', show);
+                }
+            });
+        }
+
+
+
+        function showError(message) {
+            const errorEl = document.getElementById('error-message');
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+            setTimeout(() => {
+                errorEl.style.display = 'none';
+            }, 5000);
+        }
+
+        // Export dashboard initialization for external callers
+        window.initCustomerReferralDashboard = initDashboard;
+        
+        // Start dashboard initialization
+        function startDashboard() {
+            // Thick client is loaded synchronously via <script> above
+            // But we need to ensure it's fully initialized
+            if (window.ReportApp && window.ReportApp.refresh) {
+                // Check if ReportApp has been initialized with config
+                // We can check if ReportApp.getParams() works or wait for ready event
+                if (window.ReportApp.on) {
+                    // Listen for ready event if thick client supports it
+                    window.ReportApp.on('ready', function() {
+                        console.log('Thick client ready event received');
+                        initDashboard();
+                    });
+                    
+                    // Also try to init immediately in case event already fired
+                    setTimeout(function() {
+                        if (!window.dashboardInitialized) {
+                            console.log('Fallback: initializing dashboard after timeout');
+                            initDashboard();
+                        }
+                    }, 100);
+                } else {
+                    // Thick client doesn't have events, try to init with delay
+                    setTimeout(function() {
+                        console.log('Initializing dashboard with delay');
+                        initDashboard();
+                    }, 100);
+                }
+            } else {
+                // Thick client not available yet
+                console.log('Thick client not available, waiting for DOMContentLoaded');
+                document.addEventListener('DOMContentLoaded', function() {
+                    startDashboard();
+                });
+            }
+        }
+        
+        // Track if dashboard is initialized to prevent double init
+        window.dashboardInitialized = false;
+        
+        // Start the dashboard
+        startDashboard();
+    </script>
+    
+</body>
+</html>

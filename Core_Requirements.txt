@@ -1,0 +1,5 @@
+This is a reporting application.
+It's sole purpose is to deliver configurable reports in a /reports/ directory to an embedded iframe in a parent application.
+It will require HMAC signatures, NONCE values, and expired dates for all links.
+It will require a "thick client" that is solely responsible for coordinating data between the reporting_app and the report.
+It will require immutable and mutable parameters. Immutable parameters are used in HMAC signatures to ensure data safety. Mutable parameters are simply extra. A report may have only mutable parameters and that is okay.

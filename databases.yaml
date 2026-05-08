@@ -1,0 +1,25 @@
+connections:
+  default:
+    driver: mysql
+    dsn: "root:password@tcp(localhost:3306)/testdb"
+    max_connections: 10
+    read_only: true
+    timeout: "30s"
+    row_limit: 10000
+  
+  classicmodels:
+    driver: mysql
+    dsn: "root:password@tcp(localhost:3306)/classicmodels"
+    max_connections: 10
+    read_only: true
+    timeout: "30s"
+    row_limit: 10000
+  
+  # MySQL customer_sql database
+  customer_sql:
+    driver: mysql
+    dsn: root:@tcp(localhost:3306)/customer_sql
+    max_connections: 5
+    read_only: true
+    timeout: 30s
+    row_limit: 10000

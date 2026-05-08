@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Example Dashboard</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background: #f5f7fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .header p {
+            margin: 0;
+            color: #666;
+        }
+        .params {
+            background: white;
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .params h3 {
+            margin-top: 0;
+        }
+        .param-group {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .param-item {
+            flex: 1;
+            min-width: 200px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+        button:hover {
+            background: #005d99;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .datasources {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .datasource {
+            background: white;
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+            padding: 20px;
+        }
+        .datasource h3 {
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        .data-table th, .data-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .data-table th {
+            background: #f5f7fa;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        .error {
+            background: #fee;
+            border: 1px solid #fcc;
+            padding: 15px;
+            border-radius: 4px;
+            color: #c00;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Example Dashboard</h1>
+            <p>A demonstration of the new reporting architecture</p>
+        </div>
+        
+        <div class="params">
+            <h3>Parameters</h3>
+            <div class="param-group">
+                <div class="param-item">
+                    <label>Organization ID (immutable)</label>
+                    <input type="text" id="organization_id" value="1" readonly>
+                    <small>Immutable - cannot be changed</small>
+                </div>
+                <div class="param-item">
+                    <label>Start Date (mutable)</label>
+                    <input type="date" id="start_date" value="2024-01-01">
+                </div>
+                <div class="param-item">
+                    <label>End Date (mutable)</label>
+                    <input type="date" id="end_date" value="2024-12-31">
+                </div>
+                <div class="param-item">
+                    <label>Status (mutable)</label>
+                    <select id="status">
+                        <option value="">All</option>
+                        <option value="pending">Pending</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                </div>
+            </div>
+            <button id="refresh-btn">Refresh Data</button>
+        </div>
+        
+        <div id="loading" class="loading" style="display: none;">
+            Loading data...
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div class="datasources">
+            <div class="datasource">
+                <h3>Sales Summary</h3>
+                <div id="sales-summary">No data loaded yet</div>
+            </div>
+            
+            <div class="datasource">
+                <h3>Daily Sales</h3>
+                <div id="daily-sales">No data loaded yet</div>
+            </div>
+            
+            <div class="datasource">
+                <h3>Status Breakdown</h3>
+                <div id="status-breakdown">No data loaded yet</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Wait for thick client to be ready
+        document.addEventListener('DOMContentLoaded', function() {
+            // Setup refresh button
+            document.getElementById('refresh-btn').addEventListener('click', loadData);
+            
+            // Load initial data
+            loadData();
+        });
+        
+        async function loadData() {
+            const loadingEl = document.getElementById('loading');
+            const errorEl = document.getElementById('error');
+            const refreshBtn = document.getElementById('refresh-btn');
+            
+            // Show loading state
+            loadingEl.style.display = 'block';
+            errorEl.style.display = 'none';
+            refreshBtn.disabled = true;
+            
+            try {
+                // Collect parameters
+                const params = {
+                    start_date: document.getElementById('start_date').value,
+                    end_date: document.getElementById('end_date').value,
+                    status: document.getElementById('status').value
+                };
+                
+                // Remove empty parameters
+                Object.keys(params).forEach(key => {
+                    if (!params[key]) delete params[key];
+                });
+                
+                // Use thick client to refresh data
+                const data = await window.ReportApp.refresh(params);
+                
+                // Update UI with data
+                updateDataDisplay(data);
+                
+                console.log('Data loaded successfully:', data);
+                
+            } catch (error) {
+                // Show error
+                errorEl.textContent = 'Error loading data: ' + error.message;
+                errorEl.style.display = 'block';
+                console.error('Failed to load data:', error);
+                
+            } finally {
+                // Hide loading state
+                loadingEl.style.display = 'none';
+                refreshBtn.disabled = false;
+            }
+        }
+        
+        function updateDataDisplay(data) {
+            // Update sales summary
+            if (data.sales_summary) {
+                const summary = data.sales_summary;
+                const html = `
+                    <p><strong>Total Orders:</strong> ${summary.rows[0]?.[0] || 0}</p>
+                    <p><strong>Total Revenue:</strong> ${summary.rows[0]?.[1] || 0}</p>
+                `;
+                document.getElementById('sales-summary').innerHTML = html;
+            }
+            
+            // Update daily sales
+            if (data.daily_sales) {
+                const daily = data.daily_sales;
+                if (daily.rows && daily.rows.length > 0) {
+                    let html = '<table class="data-table">';
+                    html += '<tr><th>Day</th><th>Orders</th><th>Revenue</th></tr>';
+                    daily.rows.forEach(row => {
+                        html += `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td></tr>`;
+                    });
+                    html += '</table>';
+                    document.getElementById('daily-sales').innerHTML = html;
+                } else {
+                    document.getElementById('daily-sales').innerHTML = '<p>No data</p>';
+                }
+            }
+            
+            // Update status breakdown
+            if (data.status_breakdown) {
+                const statusData = data.status_breakdown;
+                if (statusData.rows && statusData.rows.length > 0) {
+                    let html = '<table class="data-table">';
+                    html += '<tr><th>Status</th><th>Count</th></tr>';
+                    statusData.rows.forEach(row => {
+                        html += `<tr><td>${row[0]}</td><td>${row[1]}</td></tr>`;
+                    });
+                    html += '</table>';
+                    document.getElementById('status-breakdown').innerHTML = html;
+                } else {
+                    document.getElementById('status-breakdown').innerHTML = '<p>No data</p>';
+                }
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,88 @@
+# Customer Referral Analytics Dashboard using Chart.js
+id: customer_referral_analytics
+name: "Customer Referral Analytics"
+description: "Comprehensive referral tracking and analysis with Chart.js visualizations"
+database: customer_sql
+visibility: public
+expires_after: 3600
+max_rows: 10000
+
+# Immutable parameters (included in HMAC signature)
+immutable_params:
+  - organization_id
+
+# Mutable parameters (can be changed by user)
+mutable_params:
+  - start_date
+  - end_date
+
+# Important Note: Excluded organization filtering. This is intentional.
+# Datasources - named SQL queries
+datasources:
+  # Daily referral trends
+  daily_trends:
+    sql: |
+      SELECT DATE(referral_date) AS day,
+             COUNT(*) AS total_referrals,
+             SUM(CASE WHEN referral_status = 'Completed' THEN 1 ELSE 0 END) AS completed
+      FROM referrals
+      WHERE referral_date BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY DATE(referral_date)
+      ORDER BY day
+    row_limit: 1000
+    cache_ttl: 300
+    description: "Daily referral trends with completion rates"
+
+  # Status distribution
+  status_distribution:
+    sql: |
+      SELECT referral_status,
+             COUNT(*) AS count
+      FROM referrals
+      WHERE referral_date BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY referral_status
+      ORDER BY count DESC
+    row_limit: 100
+    cache_ttl: 600
+    description: "Distribution of referrals by status"
+
+  # Contact method analysis
+  contact_method_analysis:
+    sql: |
+      SELECT contact_method,
+             COUNT(*) AS total,
+             COUNT(DISTINCT seeker_id) AS unique_seekers,
+             AVG(CASE WHEN referral_status = 'Completed' THEN 1 ELSE 0 END) * 100 AS completion_rate
+      FROM referrals
+      WHERE referral_date BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY contact_method
+      HAVING total > 0
+      ORDER BY total DESC
+    row_limit: 100
+    description: "Analysis of referral contact methods"
+
+  # Monthly summary
+  monthly_summary:
+    sql: |
+      SELECT DATE_FORMAT(referral_date, '%Y-%m') AS month,
+             COUNT(*) AS total_referrals,
+             COUNT(DISTINCT seeker_id) AS unique_seekers,
+             COUNT(DISTINCT sender_user_id) AS unique_senders,
+             SUM(CASE WHEN referral_status = 'Completed' THEN 1 ELSE 0 END) AS completed
+      FROM referrals
+      WHERE referral_date BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY DATE_FORMAT(referral_date, '%Y-%m')
+      ORDER BY month
+    row_limit: 100
+    cache_ttl: 3600
+    description: "Monthly referral summary metrics"
+
+  # Unique seekers count (distinct across period)
+  unique_seekers_count:
+    sql: |
+      SELECT COUNT(DISTINCT seeker_id) AS unique_seekers
+      FROM referrals
+      WHERE referral_date BETWEEN {{start_date}} AND {{end_date}}
+    row_limit: 100
+    cache_ttl: 600
+    description: "Count of unique seekers across the period"

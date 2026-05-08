@@ -1,0 +1,1779 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Program Insights - D3.js Dashboard</title>
+    <!-- Load D3.js from CDN (specified in manifest) -->
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <!-- Load Thick Client for datasource-based reporting -->
+    <script src="/static/thick_client.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            padding: 20px;
+            background-color: #f5f7fa;
+        }
+        .dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+        .header p {
+            color: #7f8c8d;
+            margin-bottom: 20px;
+        }
+        .d3-note {
+            background: #f0f7ff;
+            border-left: 4px solid #6b75ca;
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .visualizations {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(650px, 1fr));
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+        .viz-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            height: 450px;
+        }
+        .viz-title {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 16px;
+            font-size: 18px;
+        }
+        .viz-container {
+            height: 380px;
+            position: relative;
+            transition: opacity 0.3s ease;
+        }
+        .viz-container.skeleton-loading {
+            opacity: 0.8;
+        }
+        .axis-label {
+            font-size: 12px;
+            fill: #666;
+        }
+        .grid-line {
+            stroke: #e9ecef;
+            stroke-width: 1;
+        }
+        .bar {
+            fill: #4a6fa5;
+            transition: fill 0.3s;
+        }
+        .bar:hover {
+            fill: #6b75ca;
+        }
+        .line {
+            fill: none;
+            stroke: #e74c3c;
+            stroke-width: 2;
+        }
+        .area {
+            fill: rgba(231, 76, 60, 0.1);
+        }
+        .circle {
+            fill: #3498db;
+            transition: r 0.3s;
+        }
+        .circle:hover {
+            r: 6;
+        }
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .legend {
+            font-size: 12px;
+        }
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 380px;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+        .controls {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .control-group label {
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: #2c3e50;
+            font-size: 14px;
+        }
+        .control-group select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            min-width: 180px;
+        }
+        .update-btn {
+            background: #6b75ca;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-weight: 500;
+            cursor: pointer;
+            align-self: flex-end;
+        }
+        .update-btn:hover {
+            background: #5a65c9;
+        }
+        .data-table {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-top: 24px;
+            overflow-x: auto;
+        }
+        .data-table h3 {
+            margin-bottom: 16px;
+            color: #2c3e50;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #e9ecef;
+        }
+        th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+        }
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+        .button-group {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .sample-btn {
+            background: #95a5a6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .sample-btn:hover {
+            background: #666;
+        }
+        /* Loading overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .loading-text {
+            text-align: center;
+            color: #333;
+            font-size: 14px;
+        }
+        /* Skeleton screens for chart loading */
+        .chart-skeleton {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+        .skeleton-bar {
+            fill: #f0f0f0;
+            animation: shimmer 1.5s infinite;
+        }
+        .skeleton-line {
+            stroke: #f0f0f0;
+            stroke-width: 2;
+            stroke-dasharray: 5,5;
+            animation: shimmer 1.5s infinite;
+        }
+        .skeleton-circle {
+            fill: #f0f0f0;
+            animation: shimmer 1.5s infinite;
+        }
+        .skeleton-grid {
+            stroke: #f0f0f0;
+            stroke-width: 1;
+        }
+        .skeleton-axis {
+            stroke: #f0f0f0;
+            stroke-width: 2;
+        }
+        .skeleton-axis-text {
+            fill: #f0f0f0;
+            font-size: 12px;
+        }
+        .skeleton-title {
+            fill: #f0f0f0;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        @keyframes shimmer {
+            0% {
+                opacity: 0.7;
+                fill: #f0f0f0;
+                stroke: #f0f0f0;
+            }
+            50% {
+                opacity: 0.9;
+                fill: #e8e8e8;
+                stroke: #e8e8e8;
+            }
+            100% {
+                opacity: 0.7;
+                fill: #f0f0f0;
+                stroke: #f0f0f0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h1>Program Insights Dashboard - D3.js</h1>
+            <p>Advanced program analytics with interactive D3.js visualizations</p>
+            <div class="d3-note">
+                This dashboard demonstrates D3.js capabilities including bar charts, line charts, scatter plots, and interactive tooltips.
+                D3.js provides complete control over SVG-based visualizations.
+            </div>
+
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="categorySelect">Program Category:</label>
+                <select id="categorySelect">
+                    <option value="">All Categories</option>
+                    <option value="Health">Health</option>
+                    <option value="Education">Education</option>
+                    <option value="Employment">Employment</option>
+                    <option value="Housing">Housing</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="programStatus">Program Status:</label>
+                <select id="programStatus">
+                    <option value="">All Statuses</option>
+                    <option value="published">Published</option>
+                    <option value="draft">Draft</option>
+                    <option value="archived">Archived</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="startDate">Start Date:</label>
+                <input type="date" id="startDate">
+            </div>
+            <div class="control-group">
+                <label for="endDate">End Date:</label>
+                <input type="date" id="endDate">
+            </div>
+            <div class="button-group">
+                <button class="update-btn" id="updateCharts">Update Visualizations</button>
+                <button class="sample-btn" id="loadSampleData">Load Sample Data</button>
+            </div>
+        </div>
+
+        <div class="visualizations">
+            <div class="viz-card">
+                <div class="viz-title">Program Enrollment by Category (Bar Chart)</div>
+                <div class="viz-container" id="barChart"></div>
+            </div>
+            <div class="viz-card">
+                <div class="viz-title">Monthly Enrollment Trends (Line Chart)</div>
+                <div class="viz-container" id="lineChart"></div>
+            </div>
+            <div class="viz-card">
+                <div class="viz-title">Program Performance Scatter Plot</div>
+                <div class="viz-container" id="scatterPlot"></div>
+            </div>
+            <div class="viz-card">
+                <div class="viz-title">Goal Status Distribution (Stacked Bar)</div>
+                <div class="viz-container" id="stackedBar"></div>
+            </div>
+        </div>
+
+        <div class="data-table">
+            <h3>Program Enrollment Data</h3>
+            <table id="programTable">
+                <thead>
+                    <tr>
+                        <th>Program Name</th>
+                        <th>Category</th>
+                        <th>Enrollments</th>
+                        <th>Referrals</th>
+                        <th>Completion Rate (%)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td colspan="5">Loading data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        // Global variables for D3 charts
+        let programData = [];
+        let enrollmentData = [];
+        let categoryData = [];
+        let goalData = [];
+        let dataLoaded = false;
+
+        // Parse ReportConfig according to thick client documentation
+        function parseReportConfig() {
+            const config = window.ReportConfig || {};
+            logDebug('parseReportConfig called');
+            
+            // Parse params (it's a JSON string!)
+            let params = {};
+            if (config.params) {
+                try {
+                    params = JSON.parse(config.params);
+                    logDebug(`Parsed params: ${Object.keys(params).join(', ')}`);
+                } catch (e) {
+                    console.error('Failed to parse params:', e);
+                    logDebug(`ERROR parsing params: ${e.message}`);
+                }
+            }
+            
+            // Parse datasources (optional, mostly for debugging)
+            let datasources = {};
+            if (config.datasources) {
+                try {
+                    datasources = JSON.parse(config.datasources);
+                    logDebug(`Parsed datasources: ${Object.keys(datasources).join(', ')}`);
+                } catch (e) {
+                    console.error('Failed to parse datasources:', e);
+                    logDebug(`ERROR parsing datasources: ${e.message}`);
+                }
+            }
+            
+            return { params, datasources, config };
+        }
+        
+        // Wrap refresh for debugging
+        function wrapRefreshForDebugging() {
+            if (!window.ReportApp || !window.ReportApp.refresh) return;
+            
+            const originalRefresh = window.ReportApp.refresh;
+            window.ReportApp.refresh = async function(...args) {
+                logDebug(`refresh() called with args: ${JSON.stringify(args)}`);
+                console.log('Thick client refresh called with:', args);
+                try {
+                    const result = await originalRefresh.apply(this, args);
+                    logDebug(`refresh() succeeded, returned keys: ${Object.keys(result).join(', ')}`);
+                    console.log('Thick client refresh succeeded:', result);
+                    return result;
+                } catch (error) {
+                    logDebug(`refresh() failed: ${error.message}`);
+                    console.error('Thick client refresh failed:', error);
+                    throw error;
+                }
+            };
+            logDebug('Wrapped ReportApp.refresh for debugging');
+        }
+
+        // Validate parameters before refresh
+        function validateParamsBeforeRefresh(params) {
+            logDebug(`Validating params: ${JSON.stringify(params)}`);
+            
+            // Check date ordering if both dates are present
+            if (params.start_date && params.end_date && params.start_date > params.end_date) {
+                throw new Error('Start date must be before end date');
+            }
+            
+            // Ensure we're not trying to change immutable parameters
+            // (thick client will handle this, but we can check for better error messages)
+            const currentParams = window.ReportApp ? window.ReportApp.getParams() : {};
+            for (const key in params) {
+                if (window.ReportApp && window.ReportApp.isImmutable(key)) {
+                    const currentValue = currentParams[key];
+                    if (currentValue && params[key] !== currentValue) {
+                        throw new Error(`Cannot change immutable parameter: ${key}`);
+                    }
+                }
+            }
+            
+            return true;
+        }
+
+        // Wait for thick client to be ready - Updated per thick client documentation
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('D3.js Dashboard initialized');
+            
+            // ALWAYS check if thick client is available
+            if (!window.ReportApp || typeof window.ReportApp.refresh !== 'function') {
+                console.error('Thick client not available');
+                logDebug('Thick client not available. Ensure you are accessing through the reporting app.');
+                document.querySelector('.header').innerHTML += 
+                    '<div style="background: #ffeaa7; padding: 12px; border-radius: 4px; margin-top: 16px;">' +
+                    '<strong>Thick client not available.</strong> Ensure you are accessing through a signed URL from the reporting app.</div>';
+                // Try to load sample data as fallback after delay
+                setTimeout(() => {
+                    if (!dataLoaded) {
+                        logDebug('Loading sample data as fallback (no thick client)');
+                        loadSampleData();
+                        dataLoaded = true;
+                    }
+                }, 2000);
+                return;
+            }
+            
+            // Parse initial configuration
+            const reportConfig = parseReportConfig();
+            logDebug(`Report ID: ${reportConfig.config.reportId || 'unknown'}`);
+            
+            // Wrap refresh for debugging
+            wrapRefreshForDebugging();
+            
+            // Optional: Wait for ready event
+            window.ReportApp.on('ready', function(eventData) {
+                console.log('Thick client ready for report:', eventData?.reportId || reportConfig.config.reportId);
+                logDebug('Thick client ready event fired');
+                initializeDashboard();
+            });
+            
+            // If already ready, initialize immediately
+            if (window.ReportApp.getParam) {
+                logDebug('Thick client already ready, initializing immediately');
+                setTimeout(() => initializeDashboard(), 100);
+            }
+            
+            // Fallback: if no data loaded after 5 seconds, load sample data
+            setTimeout(() => {
+                if (!dataLoaded) {
+                    logDebug('Timeout - no data loaded, loading sample data');
+                    loadSampleData();
+                    dataLoaded = true;
+                }
+            }, 5000);
+            
+            // Setup event listeners
+            document.getElementById('updateCharts').addEventListener('click', updateVisualizations);
+            document.getElementById('loadSampleData').addEventListener('click', loadSampleData);
+            
+            // Create loading overlay (initially hidden)
+            const loadingOverlay = document.createElement('div');
+            loadingOverlay.className = 'loading-overlay';
+            loadingOverlay.style.display = 'none';
+            loadingOverlay.innerHTML = `
+                <div style="text-align: center;">
+                    <div class="loading-spinner"></div>
+                    <p class="loading-text">Loading data...</p>
+                </div>
+            `;
+            document.body.appendChild(loadingOverlay);
+            
+            // Auto-refresh on date changes (debounced) - like customer_seeker_analytics
+            let debounceTimer;
+            const startDateInput = document.getElementById('startDate');
+            const endDateInput = document.getElementById('endDate');
+            
+            function scheduleAutoRefresh() {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    const startVal = startDateInput.value;
+                    const endVal = endDateInput.value;
+                    
+                    // Validate date range before refreshing
+                    if (startVal && endVal && startVal > endVal) {
+                        logDebug('Invalid date range, skipping auto-refresh');
+                        return; // Invalid range, skip
+                    }
+                    
+                    if (startVal && endVal) {
+                        logDebug('Auto-refresh triggered by date change');
+                        // Call updateVisualizations which handles loading overlay
+                        updateVisualizations();
+                    }
+                }, 300); // 300ms debounce
+            }
+            
+            // Add event listeners for auto-refresh
+            startDateInput.addEventListener('input', scheduleAutoRefresh);
+            startDateInput.addEventListener('change', scheduleAutoRefresh);
+            endDateInput.addEventListener('input', scheduleAutoRefresh);
+            endDateInput.addEventListener('change', scheduleAutoRefresh);
+        });
+        
+        // Main initialization function
+        async function initializeDashboard() {
+            logDebug('initializeDashboard called');
+            // Show skeletons for all charts during initial load
+            showChartSkeletons();
+            
+            // Show loading overlay for initial load
+            const loadingOverlay = document.querySelector('.loading-overlay');
+            if (loadingOverlay) {
+                loadingOverlay.style.display = 'flex';
+            }
+            
+            try {
+                // Set date inputs from current parameters or defaults
+                setDateInputsFromParams();
+                // Load initial data with current parameters
+                await refreshData();
+                
+                // Update UI with report name
+                if (window.ReportConfig && window.ReportConfig.reportName) {
+                    const header = document.querySelector('.header h1');
+                    if (header) {
+                        header.textContent = window.ReportConfig.reportName + ' - D3.js Dashboard';
+                    }
+                }
+                
+                dataLoaded = true;
+                logDebug('Dashboard initialized successfully');
+                
+            } catch (error) {
+                console.error('Failed to initialize dashboard:', error);
+                logDebug(`ERROR initializing dashboard: ${error.message}`);
+                // Try sample data as fallback after delay
+                setTimeout(() => {
+                    if (!dataLoaded) {
+                        logDebug('Initialization failed, loading sample data as fallback');
+                        loadSampleData();
+                        dataLoaded = true;
+                    }
+                }, 2000);
+            } finally {
+                // Hide loading overlay
+                if (loadingOverlay) {
+                    loadingOverlay.style.display = 'none';
+                }
+            }
+        }
+
+        // Helper function to convert array rows to objects using column names
+        function rowArrayToObject(rowArray, columns) {
+            if (!rowArray || !columns) return {};
+            const obj = {};
+            columns.forEach((col, index) => {
+                if (index < rowArray.length) {
+                    obj[col] = rowArray[index];
+                }
+            });
+            return obj;
+        }
+
+        // Helper to safely format completion rate (handles string or number)
+        function formatCompletionRate(value) {
+            if (value === null || value === undefined || value === '') {
+                return '0.0';
+            }
+            // Convert string to number if needed
+            const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+            if (isNaN(num)) {
+                return '0.0';
+            }
+            return num.toFixed(1);
+        }
+
+        function setDateInputsFromParams() {
+            logDebug('setDateInputsFromParams called');
+            // Set date inputs from current parameters
+            let startDateParam = window.ReportApp.getParam('start_date');
+            let endDateParam = window.ReportApp.getParam('end_date');
+            
+            // Fallback to parsed ReportConfig if thick client returns undefined
+            if (startDateParam === undefined || endDateParam === undefined) {
+                const config = parseReportConfig();
+                if (startDateParam === undefined && config.params.start_date) {
+                    startDateParam = config.params.start_date;
+                    logDebug(`Using start_date from parsed config: ${startDateParam}`);
+                }
+                if (endDateParam === undefined && config.params.end_date) {
+                    endDateParam = config.params.end_date;
+                    logDebug(`Using end_date from parsed config: ${endDateParam}`);
+                }
+            }
+            
+            logDebug(`startDateParam: ${startDateParam}, endDateParam: ${endDateParam}`);
+            
+            const startDateInput = document.getElementById('startDate');
+            const endDateInput = document.getElementById('endDate');
+            
+            if (startDateParam) {
+                startDateInput.value = startDateParam;
+                logDebug(`Set startDate to ${startDateParam}`);
+            } else if (!startDateInput.value) {
+                // Set default to 30 days ago
+                const defaultStart = new Date();
+                defaultStart.setDate(defaultStart.getDate() - 30);
+                const defaultStartStr = defaultStart.toISOString().split('T')[0];
+                startDateInput.value = defaultStartStr;
+                logDebug(`Set default startDate to ${defaultStartStr}`);
+            }
+            
+            if (endDateParam) {
+                endDateInput.value = endDateParam;
+                logDebug(`Set endDate to ${endDateParam}`);
+            } else if (!endDateInput.value) {
+                // Set default to today
+                const todayStr = new Date().toISOString().split('T')[0];
+                endDateInput.value = todayStr;
+                logDebug(`Set default endDate to ${todayStr}`);
+            }
+            logDebug(`Final dates - start: ${startDateInput.value}, end: ${endDateInput.value}`);
+        }
+
+        function logDebug(msg) {
+            console.log(msg);
+        }
+
+        // Fetch data via thick client with optional parameters
+        async function refreshData(params = {}) {
+            logDebug('refreshData called');
+            console.log('Refreshing data with params:', params);
+            try {
+                // Collect date parameters from inputs
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
+                const requestParams = {};
+                if (startDate) requestParams.start_date = startDate;
+                if (endDate) requestParams.end_date = endDate;
+                
+                logDebug(`Date inputs - start: ${startDate}, end: ${endDate}`);
+                
+                // Merge with any additional params
+                Object.assign(requestParams, params);
+                
+                // Validate parameters before refresh
+                validateParamsBeforeRefresh(requestParams);
+                
+                logDebug(`Calling ReportApp.refresh with: ${JSON.stringify(requestParams)}`);
+                // Call thick client refresh
+                const data = await window.ReportApp.refresh(requestParams);
+                logDebug(`Refresh returned, data keys: ${Object.keys(data).join(', ')}`);
+                
+                // Log details about each datasource
+                Object.keys(data).forEach(key => {
+                    const ds = data[key];
+                    if (ds && ds.rows) {
+                        logDebug(`${key}: ${ds.rows.length} rows, columns: ${ds.columns ? ds.columns.join(', ') : 'none'}`);
+                        if (ds.rows.length > 0) {
+                            logDebug(`First row of ${key}: ${JSON.stringify(ds.rows[0])}`);
+                        }
+                    } else {
+                        logDebug(`${key}: no data or empty`);
+                    }
+                });
+                
+                // Process each datasource
+                processDatasource(data, 'program_enrollment', 'programData');
+                processDatasource(data, 'enrollment_trends', 'enrollmentData');
+                processDatasource(data, 'category_analysis', 'categoryData');
+                processDatasource(data, 'goal_completion', 'goalData');
+                
+                // Initialize visualizations
+                createBarChart();
+                createLineChart();
+                createScatterPlot();
+                createStackedBar();
+                populateTable();
+                
+                // Check if data is empty
+                if (checkDataEmpty()) {
+                    logDebug('All datasources are empty');
+                    showEmptyDataMessage();
+                }
+                
+                logDebug('Visualizations created successfully');
+                
+            } catch (error) {
+                console.error('Error refreshing data:', error);
+                logDebug(`ERROR: ${error.message}`);
+                alert('Failed to load data: ' + error.message);
+            }
+        }
+        
+        function processDatasource(data, dsName, globalVarName) {
+            const ds = data[dsName];
+            if (!ds) {
+                console.warn(`Datasource ${dsName} not found in response`);
+                logDebug(`WARNING: Datasource ${dsName} not found in response`);
+                // Update both window property and global variable
+                window[globalVarName] = [];
+                if (globalVarName === 'programData') programData = [];
+                if (globalVarName === 'enrollmentData') enrollmentData = [];
+                if (globalVarName === 'categoryData') categoryData = [];
+                if (globalVarName === 'goalData') goalData = [];
+                return;
+            }
+            // Convert rows array to objects using column names
+            const rowsAsObjects = ds.rows.map(row => rowArrayToObject(row, ds.columns));
+            
+            // Update both window property and global variable
+            window[globalVarName] = rowsAsObjects;
+            if (globalVarName === 'programData') programData = rowsAsObjects;
+            if (globalVarName === 'enrollmentData') enrollmentData = rowsAsObjects;
+            if (globalVarName === 'categoryData') categoryData = rowsAsObjects;
+            if (globalVarName === 'goalData') goalData = rowsAsObjects;
+            
+            console.log(`Processed ${dsName}, rows:`, rowsAsObjects.length);
+            logDebug(`Processed ${dsName}: ${rowsAsObjects.length} rows`);
+            
+            // Debug: show first few rows
+            if (rowsAsObjects.length > 0) {
+                logDebug(`First 2 rows of ${dsName}: ${JSON.stringify(rowsAsObjects.slice(0, 2))}`);
+                
+                // Data quality checks
+                if (dsName === 'program_enrollment') {
+                    const nullProgramNames = rowsAsObjects.filter(row => row.program_name === null || row.program_name === undefined).length;
+                    const nullCategories = rowsAsObjects.filter(row => row.categories === null || row.categories === undefined || row.categories === '').length;
+                    if (nullProgramNames > 0 || nullCategories > 0) {
+                        logDebug(`⚠️ Data quality: ${nullProgramNames}/${rowsAsObjects.length} rows have null program_name, ${nullCategories}/${rowsAsObjects.length} rows have null/empty categories`);
+                    }
+                }
+            }
+        }
+
+        function checkDataEmpty() {
+            const totalRows = programData.length + enrollmentData.length + categoryData.length + goalData.length;
+            logDebug(`Total rows across all datasources: ${totalRows}`);
+            if (totalRows === 0) {
+                return true;
+            }
+            return false;
+        }
+
+        function showEmptyDataMessage() {
+            // Add a message to the header
+            const header = document.querySelector('.header');
+            if (header && !header.querySelector('.empty-data-message')) {
+                const message = document.createElement('div');
+                message.className = 'empty-data-message';
+                message.style.background = '#fff3cd';
+                message.style.borderLeft = '4px solid #ffeaa7';
+                message.style.padding = '12px';
+                message.style.borderRadius = '4px';
+                message.style.marginTop = '16px';
+                message.innerHTML = `
+                    <strong>No data found for the selected date range.</strong><br>
+                    Try adjusting the date filters or <button id="loadSampleBtn" style="background: #6b75ca; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin-left: 8px;">Load Sample Data</button> for demonstration.
+                `;
+                header.appendChild(message);
+                
+                // Add event listener to the button
+                setTimeout(() => {
+                    const loadSampleBtn = document.getElementById('loadSampleBtn');
+                    if (loadSampleBtn) {
+                        loadSampleBtn.addEventListener('click', loadSampleData);
+                    }
+                }, 100);
+            }
+        }
+
+        function loadSampleData() {
+            console.log('Loading sample data');
+            // Show skeletons while loading sample data (for consistency)
+            showChartSkeletons();
+            
+            // Sample data for program enrollment
+            programData = [
+                { program_name: 'Health Check Program', categories: 'Health', program_published_status: 'published', unique_enrollments: 150, total_referrals: 200, completion_rate: 75.5, unique_senders: 45 },
+                { program_name: 'Education Pathways', categories: 'Education', program_published_status: 'published', unique_enrollments: 120, total_referrals: 180, completion_rate: 82.3, unique_senders: 38 },
+                { program_name: 'Job Placement Initiative', categories: 'Employment', program_published_status: 'published', unique_enrollments: 95, total_referrals: 150, completion_rate: 68.2, unique_senders: 30 },
+                { program_name: 'Housing Assistance', categories: 'Housing', program_published_status: 'published', unique_enrollments: 80, total_referrals: 120, completion_rate: 90.1, unique_senders: 25 },
+                { program_name: 'Mental Wellness', categories: 'Health', program_published_status: 'draft', unique_enrollments: 45, total_referrals: 60, completion_rate: 60.5, unique_senders: 18 }
+            ];
+            
+            // Sample data for enrollment trends (monthly)
+            enrollmentData = [
+                { month: '2024-01', new_enrollments: 50, total_activity: 80, completed_enrollments: 35 },
+                { month: '2024-02', new_enrollments: 65, total_activity: 95, completed_enrollments: 48 },
+                { month: '2024-03', new_enrollments: 70, total_activity: 110, completed_enrollments: 52 },
+                { month: '2024-04', new_enrollments: 85, total_activity: 130, completed_enrollments: 65 },
+                { month: '2024-05', new_enrollments: 90, total_activity: 140, completed_enrollments: 72 }
+            ];
+            
+            // Sample data for category analysis
+            categoryData = [
+                { category: 'Health', unique_enrollments: 195, total_referrals: 260, completion_rate: 72.5, program_count: 2 },
+                { category: 'Education', unique_enrollments: 120, total_referrals: 180, completion_rate: 82.3, program_count: 1 },
+                { category: 'Employment', unique_enrollments: 95, total_referrals: 150, completion_rate: 68.2, program_count: 1 },
+                { category: 'Housing', unique_enrollments: 80, total_referrals: 120, completion_rate: 90.1, program_count: 1 }
+            ];
+            
+            // Sample data for goal completion
+            goalData = [
+                { program_name: 'Health Check Program', goal_status: 'Completed', goal_count: 120, progress_score: 100 },
+                { program_name: 'Health Check Program', goal_status: 'In Progress', goal_count: 30, progress_score: 50 },
+                { program_name: 'Education Pathways', goal_status: 'Completed', goal_count: 95, progress_score: 100 },
+                { program_name: 'Education Pathways', goal_status: 'In Progress', goal_count: 25, progress_score: 50 },
+                { program_name: 'Job Placement Initiative', goal_status: 'Completed', goal_count: 65, progress_score: 100 },
+                { program_name: 'Job Placement Initiative', goal_status: 'Not Started', goal_count: 30, progress_score: 0 }
+            ];
+            
+            console.log('Sample data loaded');
+            // Recreate visualizations with sample data
+            createBarChart();
+            createLineChart();
+            createScatterPlot();
+            createStackedBar();
+            populateTable();
+        }
+
+        async function updateVisualizations() {
+            // Show skeletons for all charts immediately
+            showChartSkeletons();
+            
+            // Show loading overlay
+            const loadingOverlay = document.querySelector('.loading-overlay');
+            if (loadingOverlay) {
+                loadingOverlay.style.display = 'flex';
+            }
+            
+            try {
+                // First, refresh data with current date inputs
+                await refreshData();
+                // Apply client-side filters (category, program status)
+                applyClientFilters();
+            } catch (error) {
+                console.error('Error in updateVisualizations:', error);
+                // Error is already handled in refreshData()
+            } finally {
+                // Hide loading overlay
+                if (loadingOverlay) {
+                    loadingOverlay.style.display = 'none';
+                }
+            }
+        }
+        
+        function applyClientFilters() {
+            const categoryFilter = document.getElementById('categorySelect').value;
+            const programStatus = document.getElementById('programStatus').value;
+            
+            // Filter program data for table
+            const filteredProgramData = programData.filter(item => {
+                return (!categoryFilter || (item.categories && item.categories.includes(categoryFilter))) &&
+                       (!programStatus || item.program_published_status === programStatus);
+            });
+            
+            // Filter category data for bar chart (if category selected)
+            let filteredCategoryData = categoryData;
+            if (categoryFilter) {
+                filteredCategoryData = categoryData.filter(d => d.category === categoryFilter);
+            }
+            
+            // Update bar chart with filtered category data
+            updateBarChart(filteredCategoryData);
+            // Update table with filtered program data
+            populateTable(filteredProgramData);
+        }
+
+        // Skeleton screen utilities
+        function showChartSkeletons() {
+            try {
+                showBarChartSkeleton();
+                showLineChartSkeleton();
+                showScatterPlotSkeleton();
+                showStackedBarSkeleton();
+                logDebug('Showing all chart skeletons');
+            } catch (error) {
+                console.error('Error showing chart skeletons:', error);
+                // Continue anyway - charts will handle empty containers
+            }
+        }
+        
+        function hideChartSkeletons() {
+            // Skeletons are removed when charts are created
+            logDebug('Hiding all chart skeletons');
+        }
+        
+        function showBarChartSkeleton() {
+            const container = document.getElementById('barChart');
+            if (!container) {
+                console.warn('barChart container not found');
+                return;
+            }
+            const width = 600;
+            const height = 350;
+            const margin = { top: 20, right: 20, bottom: 50, left: 60 };
+            
+            container.innerHTML = `
+                <svg width="${width}" height="${height}" class="chart-skeleton">
+                    <!-- Axes -->
+                    <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}" class="skeleton-axis" />
+                    <line x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}" class="skeleton-axis" />
+                    
+                    <!-- Grid lines -->
+                    ${Array.from({length: 5}, (_, i) => {
+                        const y = margin.top + (i * (height - margin.top - margin.bottom) / 4);
+                        return `<line x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}" class="skeleton-grid" />`;
+                    }).join('')}
+                    
+                    <!-- Skeleton bars (5 bars) -->
+                    ${Array.from({length: 5}, (_, i) => {
+                        const barWidth = (width - margin.left - margin.right) / 5 * 0.7;
+                        const barHeight = Math.random() * (height - margin.top - margin.bottom - 40) + 40;
+                        const x = margin.left + i * (width - margin.left - margin.right) / 5 + barWidth * 0.15;
+                        const y = height - margin.bottom - barHeight;
+                        return `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" class="skeleton-bar" />`;
+                    }).join('')}
+                    
+                    <!-- Axis labels -->
+                    <text x="${width / 2}" y="${height - 10}" text-anchor="middle" class="skeleton-axis-text">Categories</text>
+                    <text x="${margin.left - 40}" y="${height / 2}" text-anchor="middle" transform="rotate(-90, ${margin.left - 40}, ${height / 2})" class="skeleton-axis-text">Enrollments</text>
+                    <text x="${width / 2}" y="${margin.top}" text-anchor="middle" class="skeleton-title">Category Analysis</text>
+                </svg>
+            `;
+        }
+        
+        function showLineChartSkeleton() {
+            const container = document.getElementById('lineChart');
+            if (!container) {
+                console.warn('lineChart container not found');
+                return;
+            }
+            const width = 600;
+            const height = 350;
+            const margin = { top: 20, right: 20, bottom: 50, left: 60 };
+            
+            container.innerHTML = `
+                <svg width="${width}" height="${height}" class="chart-skeleton">
+                    <!-- Axes -->
+                    <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}" class="skeleton-axis" />
+                    <line x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}" class="skeleton-axis" />
+                    
+                    <!-- Grid lines -->
+                    ${Array.from({length: 5}, (_, i) => {
+                        const y = margin.top + (i * (height - margin.top - margin.bottom) / 4);
+                        return `<line x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}" class="skeleton-grid" />`;
+                    }).join('')}
+                    
+                    <!-- Skeleton line path (random points) -->
+                    <path class="skeleton-line" d="
+                        ${Array.from({length: 8}, (_, i) => {
+                            const x = margin.left + (i * (width - margin.left - margin.right) / 7);
+                            const y = margin.top + Math.random() * (height - margin.top - margin.bottom - 50) + 25;
+                            return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+                        }).join(' ')}
+                    " fill="none" />
+                    
+                    <!-- Skeleton data points -->
+                    ${Array.from({length: 8}, (_, i) => {
+                        const x = margin.left + (i * (width - margin.left - margin.right) / 7);
+                        const y = margin.top + Math.random() * (height - margin.top - margin.bottom - 50) + 25;
+                        return `<circle cx="${x}" cy="${y}" r="4" class="skeleton-circle" />`;
+                    }).join('')}
+                    
+                    <!-- Axis labels -->
+                    <text x="${width / 2}" y="${height - 10}" text-anchor="middle" class="skeleton-axis-text">Month</text>
+                    <text x="${margin.left - 40}" y="${height / 2}" text-anchor="middle" transform="rotate(-90, ${margin.left - 40}, ${height / 2})" class="skeleton-axis-text">Enrollments</text>
+                    <text x="${width / 2}" y="${margin.top}" text-anchor="middle" class="skeleton-title">Enrollment Trends</text>
+                </svg>
+            `;
+        }
+        
+        function showScatterPlotSkeleton() {
+            const container = document.getElementById('scatterPlot');
+            if (!container) {
+                console.warn('scatterPlot container not found');
+                return;
+            }
+            const width = 600;
+            const height = 350;
+            const margin = { top: 20, right: 20, bottom: 50, left: 60 };
+            
+            container.innerHTML = `
+                <svg width="${width}" height="${height}" class="chart-skeleton">
+                    <!-- Axes -->
+                    <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}" class="skeleton-axis" />
+                    <line x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}" class="skeleton-axis" />
+                    
+                    <!-- Grid lines -->
+                    ${Array.from({length: 5}, (_, i) => {
+                        const y = margin.top + (i * (height - margin.top - margin.bottom) / 4);
+                        return `<line x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}" class="skeleton-grid" />`;
+                    }).join('')}
+                    ${Array.from({length: 5}, (_, i) => {
+                        const x = margin.left + (i * (width - margin.left - margin.right) / 4);
+                        return `<line x1="${x}" y1="${margin.top}" x2="${x}" y2="${height - margin.bottom}" class="skeleton-grid" />`;
+                    }).join('')}
+                    
+                    <!-- Skeleton scatter points (15 points) -->
+                    ${Array.from({length: 15}, (_, i) => {
+                        const x = margin.left + Math.random() * (width - margin.left - margin.right);
+                        const y = margin.top + Math.random() * (height - margin.top - margin.bottom);
+                        const radius = 5 + Math.random() * 10;
+                        return `<circle cx="${x}" cy="${y}" r="${radius}" class="skeleton-circle" />`;
+                    }).join('')}
+                    
+                    <!-- Axis labels -->
+                    <text x="${width / 2}" y="${height - 10}" text-anchor="middle" class="skeleton-axis-text">Unique Enrollments</text>
+                    <text x="${margin.left - 40}" y="${height / 2}" text-anchor="middle" transform="rotate(-90, ${margin.left - 40}, ${height / 2})" class="skeleton-axis-text">Completion Rate (%)</text>
+                    <text x="${width / 2}" y="${margin.top}" text-anchor="middle" class="skeleton-title">Program Performance</text>
+                </svg>
+            `;
+        }
+        
+        function showStackedBarSkeleton() {
+            const container = document.getElementById('stackedBar');
+            if (!container) {
+                console.warn('stackedBar container not found');
+                return;
+            }
+            const width = 600;
+            const height = 350;
+            const margin = { top: 20, right: 20, bottom: 50, left: 60 };
+            
+            container.innerHTML = `
+                <svg width="${width}" height="${height}" class="chart-skeleton">
+                    <!-- Axes -->
+                    <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}" class="skeleton-axis" />
+                    <line x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}" class="skeleton-axis" />
+                    
+                    <!-- Grid lines -->
+                    ${Array.from({length: 5}, (_, i) => {
+                        const y = margin.top + (i * (height - margin.top - margin.bottom) / 4);
+                        return `<line x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}" class="skeleton-grid" />`;
+                    }).join('')}
+                    
+                    <!-- Skeleton stacked bars (4 programs, 3 segments each) -->
+                    ${Array.from({length: 4}, (_, programIdx) => {
+                        const barWidth = (width - margin.left - margin.right) / 4 * 0.7;
+                        const x = margin.left + programIdx * (width - margin.left - margin.right) / 4 + barWidth * 0.15;
+                        let currentY = height - margin.bottom;
+                        
+                        return Array.from({length: 3}, (_, segmentIdx) => {
+                            const segmentHeight = 20 + Math.random() * 80;
+                            currentY -= segmentHeight;
+                            return `<rect x="${x}" y="${currentY}" width="${barWidth}" height="${segmentHeight}" class="skeleton-bar" />`;
+                        }).join('');
+                    }).join('')}
+                    
+                    <!-- Axis labels -->
+                    <text x="${width / 2}" y="${height - 10}" text-anchor="middle" class="skeleton-axis-text">Program</text>
+                    <text x="${margin.left - 40}" y="${height / 2}" text-anchor="middle" transform="rotate(-90, ${margin.left - 40}, ${height / 2})" class="skeleton-axis-text">Goal Count</text>
+                    <text x="${width / 2}" y="${margin.top}" text-anchor="middle" class="skeleton-title">Goal Status Distribution</text>
+                </svg>
+            `;
+        }
+        
+        function createBarChart() {
+            logDebug(`createBarChart called, categoryData.length: ${categoryData.length}`);
+            const container = document.getElementById('barChart');
+            container.innerHTML = '';
+            
+            if (categoryData.length === 0) {
+                container.innerHTML = '<div class="loading">No category data available</div>';
+                logDebug('createBarChart: categoryData is empty');
+                return;
+            }
+            
+            logDebug(`First categoryData item: ${JSON.stringify(categoryData[0])}`);
+            logDebug(`categoryData categories: ${categoryData.map(d => d.category).join(', ')}`);
+
+            const width = 600;
+            const height = 350;
+            const margin = { top: 20, right: 20, bottom: 50, left: 60 };
+
+            const svg = d3.select('#barChart')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+
+            // Create scales
+            const x = d3.scaleBand()
+                .domain(categoryData.map(d => d.category))
+                .range([margin.left, width - margin.right])
+                .padding(0.1);
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(categoryData, d => d.unique_enrollments)])
+                .nice()
+                .range([height - margin.bottom, margin.top]);
+
+            // Add grid lines
+            svg.append('g')
+                .attr('class', 'grid-line')
+                .attr('transform', `translate(0,${height - margin.bottom})`)
+                .call(d3.axisBottom(x).tickSize(0));
+
+            svg.append('g')
+                .attr('class', 'grid-line')
+                .attr('transform', `translate(${margin.left},0)`)
+                .call(d3.axisLeft(y).tickSize(-width + margin.left + margin.right));
+
+            // Add bars
+            svg.selectAll('.bar')
+                .data(categoryData)
+                .enter()
+                .append('rect')
+                .attr('class', 'bar')
+                .attr('x', d => x(d.category))
+                .attr('y', d => y(d.unique_enrollments))
+                .attr('height', d => height - margin.bottom - y(d.unique_enrollments))
+                .attr('width', x.bandwidth())
+                .on('mouseover', function(event, d) {
+                    d3.select('#tooltip')
+                        .style('opacity', 1)
+                        .html(`<strong>${d.category}</strong><br>
+                               Enrollments: ${d.unique_enrollments}<br>
+                               Programs: ${d.program_count}<br>
+                               Completion: ${formatCompletionRate(d.completion_rate)}%`)
+                        .style('left', (event.pageX + 10) + 'px')
+                        .style('top', (event.pageY - 10) + 'px');
+                })
+                .on('mouseout', function() {
+                    d3.select('#tooltip').style('opacity', 0);
+                });
+
+            // Add axes
+            svg.append('g')
+                .attr('transform', `translate(0,${height - margin.bottom})`)
+                .call(d3.axisBottom(x))
+                .selectAll('text')
+                .attr('transform', 'rotate(-45)')
+                .style('text-anchor', 'end')
+                .attr('dx', '-0.8em')
+                .attr('dy', '0.15em');
+
+            svg.append('g')
+                .attr('transform', `translate(${margin.left},0)`)
+                .call(d3.axisLeft(y));
+
+            // Add axis labels
+            svg.append('text')
+                .attr('class', 'axis-label')
+                .attr('transform', 'rotate(-90)')
+                .attr('y', margin.left - 40)
+                .attr('x', -height / 2)
+                .attr('text-anchor', 'middle')
+                .text('Unique Enrollments');
+
+            svg.append('text')
+                .attr('class', 'axis-label')
+                .attr('x', width / 2)
+                .attr('y', height - 5)
+                .attr('text-anchor', 'middle')
+                .text('Program Category');
+        }
+
+        function updateBarChart(data) {
+            // Implementation to update bar chart with filtered data
+            // Simplified for example
+            console.log('Updating bar chart with filtered data:', data.length, 'items');
+        }
+
+        function createLineChart() {
+            logDebug(`createLineChart called, enrollmentData.length: ${enrollmentData.length}`);
+            const container = document.getElementById('lineChart');
+            container.innerHTML = '';
+            
+            if (enrollmentData.length === 0) {
+                container.innerHTML = '<div class="loading">No enrollment trend data available</div>';
+                logDebug('createLineChart: enrollmentData is empty');
+                return;
+            }
+            
+            logDebug(`First enrollmentData item: ${JSON.stringify(enrollmentData[0])}`);
+
+            const width = 600;
+            const height = 350;
+            const margin = { top: 20, right: 20, bottom: 50, left: 60 };
+
+            const svg = d3.select('#lineChart')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+
+            // Create scales
+            const x = d3.scaleBand()
+                .domain(enrollmentData.map(d => d.month))
+                .range([margin.left, width - margin.right])
+                .padding(0.1);
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(enrollmentData, d => Math.max(d.new_enrollments, d.total_activity))])
+                .nice()
+                .range([height - margin.bottom, margin.top]);
+
+            // Create line generator
+            const line = d3.line()
+                .x(d => x(d.month) + x.bandwidth() / 2)
+                .y(d => y(d.new_enrollments));
+
+            // Add grid lines
+            svg.append('g')
+                .attr('class', 'grid-line')
+                .attr('transform', `translate(0,${height - margin.bottom})`)
+                .call(d3.axisBottom(x).tickSize(0));
+
+            svg.append('g')
+                .attr('class', 'grid-line')
+                .attr('transform', `translate(${margin.left},0)`)
+                .call(d3.axisLeft(y).tickSize(-width + margin.left + margin.right));
+
+            // Add line
+            svg.append('path')
+                .datum(enrollmentData)
+                .attr('class', 'line')
+                .attr('d', line);
+
+            // Add circles for data points
+            svg.selectAll('.circle')
+                .data(enrollmentData)
+                .enter()
+                .append('circle')
+                .attr('class', 'circle')
+                .attr('cx', d => x(d.month) + x.bandwidth() / 2)
+                .attr('cy', d => y(d.new_enrollments))
+                .attr('r', 3)
+                .on('mouseover', function(event, d) {
+                    d3.select('#tooltip')
+                        .style('opacity', 1)
+                        .html(`<strong>${d.month}</strong><br>
+                               New Enrollments: ${d.new_enrollments}<br>
+                               Total Activity: ${d.total_activity}<br>
+                               Completed: ${d.completed_enrollments || 0}`)
+                        .style('left', (event.pageX + 10) + 'px')
+                        .style('top', (event.pageY - 10) + 'px');
+                })
+                .on('mouseout', function() {
+                    d3.select('#tooltip').style('opacity', 0);
+                });
+
+            // Add axes
+            svg.append('g')
+                .attr('transform', `translate(0,${height - margin.bottom})`)
+                .call(d3.axisBottom(x))
+                .selectAll('text')
+                .attr('transform', 'rotate(-45)')
+                .style('text-anchor', 'end')
+                .attr('dx', '-0.8em')
+                .attr('dy', '0.15em');
+
+            svg.append('g')
+                .attr('transform', `translate(${margin.left},0)`)
+                .call(d3.axisLeft(y));
+
+            // Add axis labels
+            svg.append('text')
+                .attr('class', 'axis-label')
+                .attr('transform', 'rotate(-90)')
+                .attr('y', margin.left - 40)
+                .attr('x', -height / 2)
+                .attr('text-anchor', 'middle')
+                .text('Enrollments');
+
+            svg.append('text')
+                .attr('class', 'axis-label')
+                .attr('x', width / 2)
+                .attr('y', height - 5)
+                .attr('text-anchor', 'middle')
+                .text('Month');
+        }
+
+        function createScatterPlot() {
+            logDebug(`createScatterPlot called, programData.length: ${programData.length}`);
+            const container = document.getElementById('scatterPlot');
+            container.innerHTML = '';
+            
+            if (programData.length === 0) {
+                container.innerHTML = '<div class="loading">No program performance data available</div>';
+                logDebug('createScatterPlot: programData is empty');
+                return;
+            }
+            
+            // Filter out null completion rates or enrollments for meaningful visualization
+            const validData = programData.filter(d => 
+                d.unique_enrollments && d.completion_rate && 
+                !isNaN(parseFloat(d.completion_rate)) && 
+                parseFloat(d.completion_rate) > 0
+            );
+            
+            if (validData.length === 0) {
+                container.innerHTML = '<div class="loading">No valid program performance data available</div>';
+                logDebug('createScatterPlot: No valid data after filtering');
+                return;
+            }
+            
+            logDebug(`Creating scatter plot with ${validData.length} valid data points`);
+            
+            const width = 600;
+            const height = 350;
+            const margin = { top: 20, right: 20, bottom: 50, left: 60 };
+            
+            const svg = d3.select('#scatterPlot')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+            
+            // Create scales
+            const x = d3.scaleLinear()
+                .domain([0, d3.max(validData, d => d.unique_enrollments) * 1.1])
+                .nice()
+                .range([margin.left, width - margin.right]);
+            
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(validData, d => parseFloat(d.completion_rate)) * 1.1])
+                .nice()
+                .range([height - margin.bottom, margin.top]);
+            
+            // Circle size based on total_referrals
+            const radius = d3.scaleSqrt()
+                .domain([0, d3.max(validData, d => d.total_referrals || 0)])
+                .range([3, 20]);
+            
+            // Color by completion rate
+            const color = d3.scaleSequential(d3.interpolateBlues)
+                .domain([0, d3.max(validData, d => parseFloat(d.completion_rate))]);
+            
+            // Add grid lines
+            svg.append('g')
+                .attr('class', 'grid-line')
+                .attr('transform', `translate(0,${height - margin.bottom})`)
+                .call(d3.axisBottom(x).tickSize(0));
+            
+            svg.append('g')
+                .attr('class', 'grid-line')
+                .attr('transform', `translate(${margin.left},0)`)
+                .call(d3.axisLeft(y).tickSize(-width + margin.left + margin.right));
+            
+            // Add circles
+            svg.selectAll('.circle')
+                .data(validData)
+                .enter()
+                .append('circle')
+                .attr('class', 'circle')
+                .attr('cx', d => x(d.unique_enrollments))
+                .attr('cy', d => y(parseFloat(d.completion_rate)))
+                .attr('r', d => radius(d.total_referrals || 0))
+                .style('fill', d => color(parseFloat(d.completion_rate)))
+                .style('stroke', '#333')
+                .style('stroke-width', 1)
+                .on('mouseover', function(event, d) {
+                    d3.select('#tooltip')
+                        .style('opacity', 1)
+                        .html(`<strong>${d.program_name || 'Unknown Program'}</strong><br>
+                               Category: ${d.categories || 'Uncategorized'}<br>
+                               Enrollments: ${d.unique_enrollments}<br>
+                               Referrals: ${d.total_referrals || 0}<br>
+                               Completion Rate: ${formatCompletionRate(d.completion_rate)}%<br>
+                               Senders: ${d.unique_senders || 0}`)
+                        .style('left', (event.pageX + 10) + 'px')
+                        .style('top', (event.pageY - 10) + 'px');
+                })
+                .on('mouseout', function() {
+                    d3.select('#tooltip').style('opacity', 0);
+                });
+            
+            // Add axes
+            svg.append('g')
+                .attr('transform', `translate(0,${height - margin.bottom})`)
+                .call(d3.axisBottom(x));
+            
+            svg.append('g')
+                .attr('transform', `translate(${margin.left},0)`)
+                .call(d3.axisLeft(y));
+            
+            // Add axis labels
+            svg.append('text')
+                .attr('class', 'axis-label')
+                .attr('transform', 'rotate(-90)')
+                .attr('y', margin.left - 40)
+                .attr('x', -height / 2)
+                .attr('text-anchor', 'middle')
+                .text('Completion Rate (%)');
+            
+            svg.append('text')
+                .attr('class', 'axis-label')
+                .attr('x', width / 2)
+                .attr('y', height - 5)
+                .attr('text-anchor', 'middle')
+                .text('Unique Enrollments');
+            
+            // Add legend for circle sizes
+            const legendData = [
+                { label: 'Small: Few Referrals', size: radius.range()[0] },
+                { label: 'Medium: Moderate Referrals', size: (radius.range()[0] + radius.range()[1]) / 2 },
+                { label: 'Large: Many Referrals', size: radius.range()[1] }
+            ];
+            
+            const legend = svg.append('g')
+                .attr('class', 'legend')
+                .attr('transform', `translate(${width - 150}, ${margin.top})`);
+            
+            legend.selectAll('circle')
+                .data(legendData)
+                .enter()
+                .append('circle')
+                .attr('cx', 10)
+                .attr('cy', (d, i) => 20 + i * 30)
+                .attr('r', d => d.size)
+                .style('fill', 'none')
+                .style('stroke', '#333')
+                .style('stroke-width', 1);
+            
+            legend.selectAll('text')
+                .data(legendData)
+                .enter()
+                .append('text')
+                .attr('x', 25)
+                .attr('y', (d, i) => 20 + i * 30 + 5)
+                .text(d => d.label)
+                .style('font-size', '10px')
+                .style('alignment-baseline', 'middle');
+            
+            // Add title
+            svg.append('text')
+                .attr('x', width / 2)
+                .attr('y', margin.top - 5)
+                .attr('text-anchor', 'middle')
+                .style('font-size', '14px')
+                .style('font-weight', 'bold')
+                .text('Program Performance: Enrollments vs Completion Rate');
+                
+            logDebug('Scatter plot created successfully');
+        }
+
+        function createStackedBar() {
+            logDebug(`createStackedBar called, goalData.length: ${goalData.length}`);
+            const container = document.getElementById('stackedBar');
+            container.innerHTML = '';
+            
+            if (goalData.length === 0) {
+                container.innerHTML = '<div class="loading">No goal completion data available</div>';
+                logDebug('createStackedBar: goalData is empty');
+                return;
+            }
+            
+            // Process data for stacked bar chart
+            // Group by program and goal_status
+            const programsMap = {};
+            goalData.forEach(item => {
+                const programName = item.program_name || 'Unknown Program';
+                const status = item.goal_status || 'Unknown Status';
+                const count = item.goal_count || 0;
+                
+                if (!programsMap[programName]) {
+                    programsMap[programName] = {};
+                }
+                
+                programsMap[programName][status] = (programsMap[programName][status] || 0) + count;
+            });
+            
+            // Get unique statuses
+            const allStatuses = [...new Set(goalData.map(item => item.goal_status || 'Unknown Status'))];
+            
+            // Sort statuses: Completed first, then In Progress, then others
+            const statusOrder = ['Completed', 'In Progress', 'active', 'Not Started', 'Unknown Status'];
+            const sortedStatuses = allStatuses.sort((a, b) => {
+                const indexA = statusOrder.indexOf(a);
+                const indexB = statusOrder.indexOf(b);
+                
+                // If both are in order list, sort by order
+                if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                // If only one is in order list, that one comes first
+                if (indexA !== -1) return -1;
+                if (indexB !== -1) return 1;
+                // Otherwise alphabetical
+                return a.localeCompare(b);
+            });
+            
+            // Convert to array for chart
+            const programs = Object.keys(programsMap);
+            
+            // If too many programs, limit to top 10
+            const maxPrograms = 10;
+            const displayPrograms = programs.length > maxPrograms ? 
+                programs.slice(0, maxPrograms) : programs;
+            
+            if (displayPrograms.length === 0) {
+                container.innerHTML = '<div class="loading">No valid goal data available</div>';
+                logDebug('createStackedBar: No programs after processing');
+                return;
+            }
+            
+            logDebug(`Creating stacked bar with ${displayPrograms.length} programs and ${sortedStatuses.length} statuses`);
+            
+            const width = 600;
+            const height = 350;
+            const margin = { top: 20, right: 20, bottom: 50, left: 60 };
+            
+            const svg = d3.select('#stackedBar')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+            
+            // Create scales
+            const x = d3.scaleBand()
+                .domain(displayPrograms)
+                .range([margin.left, width - margin.right])
+                .padding(0.1);
+            
+            // Calculate totals for each program
+            const programTotals = displayPrograms.map(program => {
+                return Object.values(programsMap[program]).reduce((sum, count) => sum + count, 0);
+            });
+            
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(programTotals)])
+                .nice()
+                .range([height - margin.bottom, margin.top]);
+            
+            // Color scale for statuses
+            const statusColors = {
+                'Completed': '#3c763d',
+                'In Progress': '#3a70a0',
+                'active': '#167e8e',
+                'Not Started': '#bc473a',
+                'Unknown Status': '#95a5a6'
+            };
+            
+            const color = d3.scaleOrdinal()
+                .domain(sortedStatuses)
+                .range(sortedStatuses.map(status => 
+                    statusColors[status] || `#${Math.floor(Math.random()*16777215).toString(16)}`
+                ));
+            
+            // Create stacked data
+            const stackedData = displayPrograms.map(program => {
+                const programData = { program };
+                sortedStatuses.forEach(status => {
+                    programData[status] = programsMap[program][status] || 0;
+                });
+                return programData;
+            });
+            
+            // Stack generator
+            const stack = d3.stack()
+                .keys(sortedStatuses)
+                .order(d3.stackOrderNone)
+                .offset(d3.stackOffsetNone);
+            
+            const series = stack(stackedData);
+            
+            // Add grid lines
+            svg.append('g')
+                .attr('class', 'grid-line')
+                .attr('transform', `translate(0,${height - margin.bottom})`)
+                .call(d3.axisBottom(x).tickSize(0));
+            
+            svg.append('g')
+                .attr('class', 'grid-line')
+                .attr('transform', `translate(${margin.left},0)`)
+                .call(d3.axisLeft(y).tickSize(-width + margin.left + margin.right));
+            
+            // Create groups for each status
+            const statusGroup = svg.selectAll('.status-group')
+                .data(series)
+                .enter().append('g')
+                .attr('class', 'status-group')
+                .style('fill', d => color(d.key));
+            
+            // Add bars for each status
+            statusGroup.selectAll('rect')
+                .data(d => d)
+                .enter().append('rect')
+                .attr('x', d => x(d.data.program))
+                .attr('y', d => y(d[1]))
+                .attr('height', d => y(d[0]) - y(d[1]))
+                .attr('width', x.bandwidth())
+                .on('mouseover', function(event, d) {
+                    const status = d3.select(this.parentNode).datum().key;
+                    const program = d.data.program;
+                    const count = programsMap[program][status] || 0;
+                    const total = programTotals[displayPrograms.indexOf(program)];
+                    const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+                    
+                    d3.select('#tooltip')
+                        .style('opacity', 1)
+                        .html(`<strong>${program}</strong><br>
+                               Status: ${status}<br>
+                               Goals: ${count}<br>
+                               % of Program Goals: ${percentage}%`)
+                        .style('left', (event.pageX + 10) + 'px')
+                        .style('top', (event.pageY - 10) + 'px');
+                })
+                .on('mouseout', function() {
+                    d3.select('#tooltip').style('opacity', 0);
+                });
+            
+            // Add axes
+            svg.append('g')
+                .attr('transform', `translate(0,${height - margin.bottom})`)
+                .call(d3.axisBottom(x))
+                .selectAll('text')
+                .attr('transform', 'rotate(-45)')
+                .style('text-anchor', 'end')
+                .attr('dx', '-0.8em')
+                .attr('dy', '0.15em');
+            
+            svg.append('g')
+                .attr('transform', `translate(${margin.left},0)`)
+                .call(d3.axisLeft(y));
+            
+            // Add axis labels
+            svg.append('text')
+                .attr('class', 'axis-label')
+                .attr('transform', 'rotate(-90)')
+                .attr('y', margin.left - 40)
+                .attr('x', -height / 2)
+                .attr('text-anchor', 'middle')
+                .text('Number of Goals');
+            
+            svg.append('text')
+                .attr('class', 'axis-label')
+                .attr('x', width / 2)
+                .attr('y', height - 5)
+                .attr('text-anchor', 'middle')
+                .text('Programs');
+            
+            // Add legend for statuses
+            const legend = svg.append('g')
+                .attr('class', 'legend')
+                .attr('transform', `translate(${width - 150}, ${margin.top})`);
+            
+            sortedStatuses.forEach((status, i) => {
+                const legendRow = legend.append('g')
+                    .attr('transform', `translate(0, ${i * 20})`);
+                
+                legendRow.append('rect')
+                    .attr('width', 10)
+                    .attr('height', 10)
+                    .attr('fill', color(status));
+                
+                legendRow.append('text')
+                    .attr('x', 15)
+                    .attr('y', 9)
+                    .text(status)
+                    .style('font-size', '10px')
+                    .style('alignment-baseline', 'middle');
+            });
+            
+            // Add title
+            svg.append('text')
+                .attr('x', width / 2)
+                .attr('y', margin.top - 5)
+                .attr('text-anchor', 'middle')
+                .style('font-size', '14px')
+                .style('font-weight', 'bold')
+                .text('Goal Status Distribution by Program');
+            
+            // If we limited programs, add a note
+            if (programs.length > maxPrograms) {
+                svg.append('text')
+                    .attr('x', width / 2)
+                    .attr('y', height - margin.bottom + 30)
+                    .attr('text-anchor', 'middle')
+                    .style('font-size', '11px')
+                    .style('fill', '#7f8c8d')
+                    .text(`Showing top ${maxPrograms} of ${programs.length} programs`);
+            }
+            
+            logDebug('Stacked bar chart created successfully');
+        }
+
+        function populateTable(data = programData) {
+            logDebug(`populateTable called, data.length: ${data.length}, programData.length: ${programData.length}`);
+            const tableBody = document.querySelector('#programTable tbody');
+            
+            if (!data || data.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="5">No data available</td></tr>';
+                logDebug('populateTable: data is empty');
+                return;
+            }
+            
+            logDebug(`First few program names: ${data.slice(0, 3).map(d => d.program_name || 'null').join(', ')}`);
+
+            let html = '';
+            data.slice(0, 10).forEach(row => {
+                html += `<tr>
+                    <td>${row.program_name || 'Unknown'}</td>
+                    <td>${row.categories || 'Uncategorized'}</td>
+                    <td>${row.unique_enrollments || 0}</td>
+                    <td>${row.total_referrals || 0}</td>
+                    <td>${formatCompletionRate(row.completion_rate)}</td>
+                </tr>`;
+            });
+            
+            if (data.length > 10) {
+                html += `<tr><td colspan="5" style="text-align: center; color: #7f8c8d;">
+                    ... and ${data.length - 10} more programs
+                </td></tr>`;
+            }
+            
+            tableBody.innerHTML = html;
+        }
+    </script>
+</body>
+</html>

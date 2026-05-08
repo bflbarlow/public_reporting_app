@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seeker Analytics - Plotly.js Dashboard</title>
+    <!-- Load Plotly.js from CDN (specified in manifest) -->
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <!-- Load Thick Client for datasource-based reporting -->
+    <script src="/static/thick_client.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            padding: 20px;
+            background-color: #f5f7fa;
+        }
+        .dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+        .header p {
+            color: #7f8c8d;
+            margin-bottom: 20px;
+        }
+        .plotly-note {
+            background: #f0f7ff;
+            border-left: 4px solid #636efa;
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .plotly-note code {
+            background: #f1f8ff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+        .visualizations {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+        .viz-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            height: 550px;
+        }
+        .viz-title {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 16px;
+            font-size: 18px;
+        }
+        .viz-container {
+            height: 420px;
+            position: relative;
+        }
+        .plotly-chart {
+            width: 100%;
+            height: 100%;
+        }
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 420px;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+        .controls {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-width: 200px;
+        }
+        .control-group label {
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: #2c3e50;
+            font-size: 14px;
+        }
+        .control-group select, .control-group input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .chart-controls {
+            display: flex;
+            gap: 12px;
+            margin-top: 10px;
+        }
+        .chart-btn {
+            background: #636efa;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .chart-btn:hover {
+            background: #4a55d4;
+        }
+        .chart-btn.secondary {
+            background: #7f8c8d;
+        }
+        .chart-btn.secondary:hover {
+            background: #6c7b7d;
+        }
+        .data-summary {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+        .summary-card {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+        .summary-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+        .summary-label {
+            font-size: 14px;
+            color: #7f8c8d;
+        }
+        .data-table {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-top: 24px;
+            overflow-x: auto;
+        }
+        .data-table h3 {
+            margin-bottom: 16px;
+            color: #2c3e50;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #e9ecef;
+        }
+        th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+        }
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h1>Seeker Analytics Dashboard - Plotly.js</h1>
+            <p>Interactive seeker analytics with Plotly.js charts featuring hover details, zoom, and export capabilities</p>
+            <div class="plotly-note">
+                Plotly.js provides rich interactive charts with tooltips, zoom, pan, and export options. 
+                This dashboard demonstrates line charts, bar charts, scatter plots, and geographic visualizations.
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="startDate">Start Date:</label>
+                <input type="date" id="startDate" />
+            </div>
+            <div class="control-group">
+                <label for="endDate">End Date:</label>
+                <input type="date" id="endDate" />
+            </div>
+            <div class="control-group">
+                <label for="profileStatus">Profile Status:</label>
+                <select id="profileStatus">
+                    <option value="">All Statuses</option>
+                    <option value="active">Active</option>
+                    <option value="archived">Archived</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="followUp">Follow-up Status:</label>
+                <select id="followUp">
+                    <option value="">All</option>
+                    <option value="1">Needs Follow-up</option>
+                    <option value="0">No Follow-up Needed</option>
+                </select>
+            </div>
+            <button class="chart-btn" id="updateCharts">Update Charts</button>
+            <button class="chart-btn secondary" id="resetCharts">Reset View</button>
+        </div>
+
+        <div class="data-summary" id="summaryCards">
+            <div class="summary-card">
+                <div class="summary-value">0</div>
+                <div class="summary-label">Total Seekers</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-value">0</div>
+                <div class="summary-label">Active Rate</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-value">0</div>
+                <div class="summary-label">Follow-up Rate</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-value">0</div>
+                <div class="summary-label">Subdomains</div>
+            </div>
+        </div>
+
+        <div class="visualizations">
+            <div class="viz-card">
+                <div class="viz-title">Daily Seeker Profile Trends (Line Chart)</div>
+                <div class="chart-controls">
+                    <button class="chart-btn" data-chart="profileTrends" data-type="line">Line</button>
+                    <button class="chart-btn secondary" data-chart="profileTrends" data-type="bar">Bar</button>
+                    <button class="chart-btn secondary" data-chart="profileTrends" data-type="scatter">Scatter</button>
+                </div>
+                <div class="viz-container" id="profileTrendsChart"></div>
+            </div>
+            <div class="viz-card">
+                <div class="viz-title">Geographic Distribution (Bar Chart)</div>
+                <div class="chart-controls">
+                    <button class="chart-btn" data-chart="geoDistribution" data-type="bar">Vertical</button>
+                    <button class="chart-btn secondary" data-chart="geoDistribution" data-type="horizontal">Horizontal</button>
+                </div>
+                <div class="viz-container" id="geoDistributionChart"></div>
+            </div>
+            <div class="viz-card">
+                <div class="viz-title">Monthly Seeker Activity</div>
+                <div class="chart-controls">
+                    <button class="chart-btn" data-chart="engagement" data-type="line">Lines</button>
+                    <button class="chart-btn secondary" data-chart="engagement" data-type="stacked">Stacked</button>
+                </div>
+                <div class="viz-container" id="engagementChart"></div>
+            </div>
+            <div class="viz-card">
+                <div class="viz-title">Top Programs Analysis</div>
+                <div class="chart-controls">
+                    <button class="chart-btn" data-chart="household" data-type="scatter">Scatter</button>
+                    <button class="chart-btn secondary" data-chart="household" data-type="bubble">Bubble</button>
+                </div>
+                <div class="viz-container" id="householdChart"></div>
+            </div>
+        </div>
+
+        <div class="data-table">
+            <h3>Top Active Seekers</h3>
+            <table id="seekerTable">
+                <thead>
+                    <tr>
+                        <th>Seeker ID</th>
+                        <th>Name</th>
+                        <th>Profile Created</th>
+                        <th>Referrals</th>
+                        <th>Programs</th>
+                        <th>First Referral</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td colspan="6">Loading data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Global variables for Plotly charts
+        let seekerProfileData = [];
+        let geoDistributionData = [];
+        let engagementData = [];
+        let householdData = [];
+        let activityData = [];
+        
+        // Chart configuration
+        const chartConfig = {
+            profileTrends: { type: 'line' },
+            geoDistribution: { type: 'bar' },
+            engagement: { type: 'line' },
+            household: { type: 'scatter' }
+        };
+        
+        // Helper to convert array rows to objects using column names
+        function rowArrayToObject(rowArray, columns) {
+            if (!rowArray || !columns) return {};
+            const obj = {};
+            columns.forEach((col, index) => {
+                if (index < rowArray.length) {
+                    obj[col] = rowArray[index];
+                }
+            });
+            return obj;
+        }
+
+        // Wait for client API to be ready
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('Plotly.js Dashboard initialized');
+            
+            // Check if thick client is available
+            if (!window.ReportApp || !window.ReportApp.refresh) {
+                console.error('Thick client not available. Ensure thick_client.js is loaded.');
+                document.querySelector('.header').innerHTML += 
+                    '<div style="background: #ffeaa7; padding: 12px; border-radius: 4px; margin-top: 16px;">' +
+                    '<strong>Thick client not available.</strong> Ensure you are accessing through the reporting app.</div>';
+                return;
+            }
+            
+            // Add loading overlay
+            const loadingHtml = '<div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000;"><div style="text-align: center;"><div style="border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 10px;"></div><p>Loading data...</p></div></div>';
+            document.body.insertAdjacentHTML('beforeend', loadingHtml);
+            
+            // Get current parameters from ReportConfig
+            const config = window.ReportConfig || {};
+            let params = {};
+            if (config.params) {
+                if (typeof config.params === 'string') {
+                    try {
+                        params = JSON.parse(config.params);
+                    } catch (e) {
+                        console.error('Failed to parse params JSON:', e);
+                    }
+                } else {
+                    params = config.params;
+                }
+            }
+            
+            // Initialize date pickers from params or defaults
+            const today = new Date();
+            const thirtyDaysAgo = new Date(today);
+            thirtyDaysAgo.setDate(today.getDate() - 30);
+            
+            const startDateInput = document.getElementById('startDate');
+            const endDateInput = document.getElementById('endDate');
+            startDateInput.value = params.start_date || thirtyDaysAgo.toISOString().split('T')[0];
+            endDateInput.value = params.end_date || today.toISOString().split('T')[0];
+            
+            console.log('Fetching data with params:', params);
+            
+            try {
+                
+                // Fetch data via thick client
+                const data = await window.ReportApp.refresh(params);
+                console.log('Data loaded:', Object.keys(data));
+                
+                // Transform data to __reportData format for compatibility
+                window.__reportData = {
+                    datasources: {},
+                    currentParams: params
+                };
+                
+                // Convert thick client response format to __reportData format
+                // thick client: { datasourceName: { columns: [], rows: [] } }
+                // __reportData expects: { datasources: { datasourceName: { data: { columns: [], rows: [] } } } }
+                Object.keys(data).forEach(dsName => {
+                    const ds = data[dsName];
+                    // Convert array rows to objects for compatibility
+                    const rowsAsObjects = ds.rows ? ds.rows.map(row => rowArrayToObject(row, ds.columns)) : [];
+                    window.__reportData.datasources[dsName] = {
+                        data: {
+                            columns: ds.columns,
+                            rows: rowsAsObjects
+                        }
+                    };
+                });
+                
+                console.log('Available datasources:', Object.keys(window.__reportData.datasources));
+                
+                // Load initial data
+                loadData();
+                
+            } catch (error) {
+                console.error('Failed to load data:', error);
+                document.querySelector('.header').innerHTML += 
+                    '<div style="background: #fceceb; padding: 12px; border-radius: 4px; margin-top: 16px; color: #bc473a;">' +
+                    '<strong>Partial data load:</strong> Some datasources failed to load. Showing available data only. Error: ' + error.message + '</div>';
+                
+                // Create empty __reportData structure with empty datasources
+                // List of expected datasources from report.yaml
+                const expectedDatasources = ['seeker_profiles', 'geographic_distribution', 'engagement_metrics', 'household_analysis', 'activity_timeline'];
+                
+                window.__reportData = {
+                    datasources: {},
+                    currentParams: params || {}
+                };
+                
+                expectedDatasources.forEach(dsName => {
+                    window.__reportData.datasources[dsName] = {
+                        data: {
+                            columns: [],
+                            rows: []
+                        }
+                    };
+                });
+                
+                console.log('Created empty datasources due to error:', Object.keys(window.__reportData.datasources));
+                
+                // Load initial data with empty datasets
+                loadData();
+            } finally {
+                // Remove loading overlay
+                const overlay = document.querySelector('div[style*="position: fixed; top: 0"]');
+                if (overlay) overlay.remove();
+            }
+            
+            // Setup event listeners
+            document.getElementById('updateCharts').addEventListener('click', updateCharts);
+            document.getElementById('resetCharts').addEventListener('click', resetCharts);
+            
+            // Auto-refresh on date changes (debounced)
+            let debounceTimer;
+            const autoRefreshStartDateInput = document.getElementById('startDate');
+            const autoRefreshEndDateInput = document.getElementById('endDate');
+            
+            function scheduleAutoRefresh() {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    const startVal = autoRefreshStartDateInput.value;
+                    const endVal = autoRefreshEndDateInput.value;
+                    
+                    if (startVal && endVal && startVal > endVal) {
+                        return; // Invalid range, skip
+                    }
+                    
+                    updateCharts();
+                }, 300);
+            }
+            
+            autoRefreshStartDateInput.addEventListener('input', scheduleAutoRefresh);
+            autoRefreshStartDateInput.addEventListener('change', scheduleAutoRefresh);
+            autoRefreshEndDateInput.addEventListener('input', scheduleAutoRefresh);
+            autoRefreshEndDateInput.addEventListener('change', scheduleAutoRefresh);
+            
+            // Setup chart type buttons
+            document.querySelectorAll('.chart-controls .chart-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const chartId = this.dataset.chart;
+                    const chartType = this.dataset.type;
+                    
+                    // Update active button
+                    this.parentElement.querySelectorAll('.chart-btn').forEach(b => {
+                        b.classList.remove('active');
+                        b.classList.add('secondary');
+                    });
+                    this.classList.add('active');
+                    this.classList.remove('secondary');
+                    
+                    // Update chart type
+                    chartConfig[chartId].type = chartType;
+                    
+                    // Redraw chart
+                    drawChart(chartId);
+                });
+            });
+            
+            // Initialize with active buttons
+            document.querySelectorAll('.chart-controls .chart-btn:first-child').forEach(btn => {
+                btn.classList.add('active');
+                btn.classList.remove('secondary');
+            });
+        });
+        
+        // Add CSS for spinner animation
+        const style = document.createElement('style');
+        style.textContent = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
+        document.head.appendChild(style);
+
+        function loadData() {
+            try {
+                // Get data from datasources
+                const seekerProfiles = window.__reportData.datasources.seeker_profiles?.data || { rows: [] };
+                const geographicDistribution = window.__reportData.datasources.geographic_distribution?.data || { rows: [] };
+                const engagementMetrics = window.__reportData.datasources.engagement_metrics?.data || { rows: [] };
+                const householdAnalysis = window.__reportData.datasources.household_analysis?.data || { rows: [] };
+                const activityTimeline = window.__reportData.datasources.activity_timeline?.data || { rows: [] };
+
+                seekerProfileData = seekerProfiles.rows;
+                geoDistributionData = geographicDistribution.rows;
+                engagementData = engagementMetrics.rows;
+                householdData = householdAnalysis.rows;
+                activityData = activityTimeline.rows;
+
+                // Debug logging
+                console.log('Data loaded:', {
+                    seekerProfiles: seekerProfiles.rows.length,
+                    geographicDistribution: geographicDistribution.rows.length,
+                    engagementMetrics: engagementMetrics.rows.length,
+                    householdAnalysis: householdAnalysis.rows.length,
+                    activityTimeline: activityTimeline.rows.length
+                });
+                if (engagementMetrics.rows.length > 0) {
+                    console.log('Engagement sample:', engagementMetrics.rows[0]);
+                }
+                if (householdAnalysis.rows.length > 0) {
+                    console.log('Household sample:', householdAnalysis.rows[0]);
+                }
+
+                // Update summary cards
+                updateSummaryCards();
+                
+                // Create charts
+                createProfileTrendsChart();
+                createGeoDistributionChart();
+                createEngagementChart();
+                createHouseholdChart();
+                populateTable();
+            } catch (error) {
+                console.error('Error in loadData:', error);
+                // Show error message in dashboard
+                const header = document.querySelector('.header');
+                if (header) {
+                    header.innerHTML += '<div style="background: #fceceb; padding: 12px; border-radius: 4px; margin-top: 16px; color: #bc473a;">' +
+                        '<strong>Dashboard error:</strong> ' + error.message + '</div>';
+                }
+            }
+        }
+
+        function updateSummaryCards() {
+            // Calculate summary statistics
+            const totalSeekers = seekerProfileData.reduce((sum, row) => sum + (Number(row.new_profiles) || 0), 0);
+            
+            let activeRate = 0;
+            let followUpRate = 0;
+            
+            if (seekerProfileData.length > 0) {
+                const activeSum = seekerProfileData.reduce((sum, row) => sum + (Number(row.active_rate) || 0), 0);
+                const followUpSum = seekerProfileData.reduce((sum, row) => sum + (Number(row.follow_up_rate) || 0), 0);
+                activeRate = activeSum / seekerProfileData.length;
+                followUpRate = followUpSum / seekerProfileData.length;
+            }
+            
+            const subdomainCount = new Set(geoDistributionData.map(row => row.subdomain)).size;
+
+            // Update DOM
+            document.querySelectorAll('.summary-card')[0].querySelector('.summary-value').textContent = 
+                totalSeekers.toLocaleString();
+            document.querySelectorAll('.summary-card')[1].querySelector('.summary-value').textContent = 
+                (Number(activeRate) || 0).toFixed(1) + '%';
+            document.querySelectorAll('.summary-card')[2].querySelector('.summary-value').textContent = 
+                (Number(followUpRate) || 0).toFixed(1) + '%';
+            document.querySelectorAll('.summary-card')[3].querySelector('.summary-value').textContent = 
+                subdomainCount;
+        }
+
+        function createProfileTrendsChart() {
+            const container = document.getElementById('profileTrendsChart');
+            
+            if (seekerProfileData.length === 0) {
+                container.innerHTML = '<div class="loading">No seeker profile data available</div>';
+                return;
+            }
+
+            const dates = seekerProfileData.map(row => row.profile_date);
+            const newProfiles = seekerProfileData.map(row => Number(row.new_profiles) || 0);
+            const activeRates = seekerProfileData.map(row => Number(row.active_rate) || 0);
+            const followUpRates = seekerProfileData.map(row => Number(row.follow_up_rate) || 0);
+
+            const trace1 = {
+                x: dates,
+                y: newProfiles,
+                type: chartConfig.profileTrends.type === 'scatter' ? 'scatter' : chartConfig.profileTrends.type,
+                mode: chartConfig.profileTrends.type === 'scatter' ? 'markers' : 'lines+markers',
+                name: 'New Profiles',
+                line: { color: '#636efa' },
+                marker: { size: 6 }
+            };
+
+            const trace2 = {
+                x: dates,
+                y: activeRates,
+                type: chartConfig.profileTrends.type === 'scatter' ? 'scatter' : chartConfig.profileTrends.type,
+                mode: chartConfig.profileTrends.type === 'scatter' ? 'markers' : 'lines+markers',
+                name: 'Active Rate (%)',
+                yaxis: 'y2',
+                line: { color: '#00cc96' },
+                marker: { size: 6 }
+            };
+
+            const layout = {
+                height: 420,
+                margin: { t: 30, r: 30, b: 60, l: 60 },
+                showlegend: true,
+                legend: { x: 0, y: 1.2, orientation: 'h' },
+                xaxis: {
+                    title: 'Date',
+                    tickangle: -45
+                },
+                yaxis: {
+                    title: 'New Profiles',
+                    side: 'left'
+                },
+                yaxis2: {
+                    title: 'Rate (%)',
+                    side: 'right',
+                    overlaying: 'y',
+                    range: [0, 100]
+                },
+                hovermode: 'closest'
+            };
+
+            Plotly.newPlot('profileTrendsChart', [trace1, trace2], layout, {responsive: true});
+        }
+
+        function createGeoDistributionChart() {
+            const container = document.getElementById('geoDistributionChart');
+            
+            if (geoDistributionData.length === 0) {
+                container.innerHTML = '<div class="loading">No geographic distribution data available</div>';
+                return;
+            }
+
+            const subdomains = geoDistributionData.map(row => row.subdomain || 'Unknown');
+            const seekerCounts = geoDistributionData.map(row => Number(row.seeker_count) || 0);
+            const completionRates = geoDistributionData.map(row => Number(row.referral_completion_rate) || 0);
+
+            const isHorizontal = chartConfig.geoDistribution.type === 'horizontal';
+
+            const trace1 = {
+                x: isHorizontal ? seekerCounts : subdomains,
+                y: isHorizontal ? subdomains : seekerCounts,
+                type: 'bar',
+                name: 'Seeker Count',
+                marker: { color: '#636efa' },
+                text: seekerCounts.map(count => (Number(count) || 0).toLocaleString()),
+                textposition: 'auto',
+                orientation: isHorizontal ? 'h' : 'v'
+            };
+
+            const trace2 = {
+                x: isHorizontal ? completionRates : subdomains,
+                y: isHorizontal ? subdomains : completionRates,
+                type: 'bar',
+                name: 'Completion Rate (%)',
+                marker: { color: '#ef553b' },
+                text: completionRates.map(rate => (Number(rate) || 0).toFixed(1) + '%'),
+                textposition: 'auto',
+                orientation: isHorizontal ? 'h' : 'v',
+                yaxis: 'y2'
+            };
+
+            const layout = {
+                height: 420,
+                margin: { t: 30, r: 30, b: 80, l: 80 },
+                showlegend: true,
+                legend: { x: 0, y: 1.2, orientation: 'h' },
+                xaxis: {
+                    title: isHorizontal ? 'Seeker Count' : 'Subdomain',
+                    tickangle: isHorizontal ? 0 : -45
+                },
+                yaxis: {
+                    title: isHorizontal ? 'Subdomain' : 'Seeker Count',
+                    side: 'left'
+                },
+                yaxis2: {
+                    title: 'Completion Rate (%)',
+                    side: 'right',
+                    overlaying: 'y',
+                    range: [0, 100]
+                },
+                barmode: 'group',
+                hovermode: 'closest'
+            };
+
+            Plotly.newPlot('geoDistributionChart', [trace1, trace2], layout, {responsive: true});
+        }
+
+        function createEngagementChart() {
+            const container = document.getElementById('engagementChart');
+            
+            // Filter out the 'No Data' placeholder row
+            const filteredData = engagementData.filter(row => row.month !== 'No Data');
+            
+            if (filteredData.length === 0) {
+                container.innerHTML = '<div class="loading" style="color: #7f8c8d;">No engagement data available</div>';
+                return;
+            }
+
+            const months = filteredData.map(row => row.month);
+            const newSeekers = filteredData.map(row => Number(row.new_seekers) || 0);
+            const totalReferrals = filteredData.map(row => Number(row.total_referrals) || 0);
+            const totalNotes = filteredData.map(row => Number(row.total_notes) || 0);
+            const totalAssessments = filteredData.map(row => Number(row.total_assessments) || 0);
+            const successRates = filteredData.map(row => Number(row.referral_success_rate) || 0);
+
+            const chartType = chartConfig.engagement.type;
+            const isLineChart = chartType === 'line';
+            const isStacked = chartType === 'stacked';
+            
+            // Main metrics trace (varies by chart type)
+            const traces = [];
+            
+            if (isLineChart) {
+                // Line chart for main metrics
+                traces.push({
+                    x: months,
+                    y: newSeekers,
+                    type: 'line',
+                    mode: 'lines+markers',
+                    name: 'New Seekers',
+                    line: { color: '#636efa', width: 2 },
+                    marker: { size: 6 }
+                });
+                
+                traces.push({
+                    x: months,
+                    y: totalReferrals,
+                    type: 'line',
+                    mode: 'lines+markers',
+                    name: 'Referrals',
+                    line: { color: '#ef553b', width: 2 },
+                    marker: { size: 6 }
+                });
+                
+                traces.push({
+                    x: months,
+                    y: totalNotes,
+                    type: 'line',
+                    mode: 'lines+markers',
+                    name: 'Notes',
+                    line: { color: '#00cc96', width: 2 },
+                    marker: { size: 6 }
+                });
+                
+                traces.push({
+                    x: months,
+                    y: totalAssessments,
+                    type: 'line',
+                    mode: 'lines+markers',
+                    name: 'Assessments',
+                    line: { color: '#ffa15a', width: 2 },
+                    marker: { size: 6 }
+                });
+            } else {
+                // Bar chart (grouped or stacked)
+                traces.push({
+                    x: months,
+                    y: newSeekers,
+                    type: 'bar',
+                    name: 'New Seekers',
+                    marker: { color: '#636efa' },
+                    text: newSeekers.map(count => count.toLocaleString()),
+                    textposition: 'auto'
+                });
+
+                traces.push({
+                    x: months,
+                    y: totalReferrals,
+                    type: 'bar',
+                    name: 'Referrals',
+                    marker: { color: '#ef553b' },
+                    text: totalReferrals.map(count => count.toLocaleString()),
+                    textposition: 'auto'
+                });
+
+                traces.push({
+                    x: months,
+                    y: totalNotes,
+                    type: 'bar',
+                    name: 'Notes',
+                    marker: { color: '#00cc96' },
+                    text: totalNotes.map(count => count.toLocaleString()),
+                    textposition: 'auto'
+                });
+
+                traces.push({
+                    x: months,
+                    y: totalAssessments,
+                    type: 'bar',
+                    name: 'Assessments',
+                    marker: { color: '#ffa15a' },
+                    text: totalAssessments.map(count => count.toLocaleString()),
+                    textposition: 'auto'
+                });
+            }
+            
+            // Success rate as separate line trace
+            traces.push({
+                x: months,
+                y: successRates,
+                type: 'line',
+                mode: 'lines+markers',
+                name: 'Success Rate (%)',
+                yaxis: 'y2',
+                line: { color: '#ab63fa', width: 3 },
+                marker: { size: 8 }
+            });
+
+            const layout = {
+                height: 420,
+                margin: { t: 30, r: 30, b: 80, l: 60 },
+                showlegend: true,
+                legend: { x: 0, y: 1.2, orientation: 'h' },
+                xaxis: {
+                    title: 'Month',
+                    tickangle: -45
+                },
+                yaxis: {
+                    title: 'Count',
+                    side: 'left'
+                },
+                yaxis2: {
+                    title: 'Success Rate (%)',
+                    side: 'right',
+                    overlaying: 'y',
+                    range: [0, 100]
+                },
+                barmode: isStacked ? 'stack' : 'group',
+                hovermode: 'closest'
+            };
+
+            Plotly.newPlot('engagementChart', traces, layout, {responsive: true});
+        }
+
+        function createHouseholdChart() {
+            const container = document.getElementById('householdChart');
+            
+            // Filter out the 'No Programs' placeholder row
+            const filteredData = householdData.filter(row => row.status_group !== 'No Programs');
+            
+            if (filteredData.length === 0) {
+                container.innerHTML = '<div class="loading" style="color: #7f8c8d;">No program data available</div>';
+                return;
+            }
+
+            const statusGroups = filteredData.map(row => row.status_group || 'Unknown');
+            const seekerCounts = filteredData.map(row => Number(row.seeker_count) || 0);
+            const completionRates = filteredData.map(row => Number(row.completion_rate) || 0);
+
+            const isBubble = chartConfig.household.type === 'bubble';
+            const isScatter = chartConfig.household.type === 'scatter';
+            
+            if (isBubble || isScatter) {
+                // Bubble/Scatter chart: size by seeker_count, color by completion_rate
+                const trace = {
+                    x: statusGroups,
+                    y: seekerCounts,
+                    mode: 'markers',
+                    type: 'scatter',
+                    name: 'Programs',
+                    marker: {
+                        size: seekerCounts.map(count => Math.max(10, count / Math.max(...seekerCounts) * 50)),
+                        color: completionRates,
+                        colorscale: 'Viridis',
+                        showscale: true,
+                        colorbar: {
+                            title: 'Completion Rate (%)',
+                            titleside: 'right'
+                        }
+                    },
+                    text: statusGroups.map((status, i) => 
+                        `${status}: ${seekerCounts[i].toLocaleString()} seekers, ${completionRates[i].toFixed(1)}% completion`
+                    ),
+                    hoverinfo: 'text'
+                };
+
+                const layout = {
+                    height: 420,
+                    margin: { t: 30, r: 30, b: 80, l: 80 },
+                    showlegend: false,
+                    xaxis: {
+                        title: 'Program',
+                        tickangle: -45
+                    },
+                    yaxis: {
+                        title: 'Seeker Count',
+                        side: 'left'
+                    },
+                    hovermode: 'closest'
+                };
+
+                Plotly.newPlot('householdChart', [trace], layout, {responsive: true});
+            } else {
+                // Default: Bar chart
+                const trace1 = {
+                    x: statusGroups,
+                    y: seekerCounts,
+                    type: 'bar',
+                    name: 'Seeker Count',
+                    marker: { color: '#636efa' },
+                    text: seekerCounts.map(count => count.toLocaleString()),
+                    textposition: 'auto'
+                };
+
+                const trace2 = {
+                    x: statusGroups,
+                    y: completionRates,
+                    type: 'bar',
+                    name: 'Completion Rate (%)',
+                    marker: { color: '#00cc96' },
+                    text: completionRates.map(rate => rate.toFixed(1) + '%'),
+                    textposition: 'auto',
+                    yaxis: 'y2'
+                };
+
+                const layout = {
+                    height: 420,
+                    margin: { t: 30, r: 30, b: 80, l: 80 },
+                    showlegend: true,
+                    legend: { x: 0, y: 1.2, orientation: 'h' },
+                    xaxis: {
+                        title: 'Program',
+                        tickangle: -45
+                    },
+                    yaxis: {
+                        title: 'Seeker Count',
+                        side: 'left'
+                    },
+                    yaxis2: {
+                        title: 'Completion Rate (%)',
+                        side: 'right',
+                        overlaying: 'y',
+                        range: [0, 100]
+                    },
+                    barmode: 'group',
+                    hovermode: 'closest'
+                };
+
+                Plotly.newPlot('householdChart', [trace1, trace2], layout, {responsive: true});
+            }
+        }
+
+        function drawChart(chartId) {
+            switch(chartId) {
+                case 'profileTrends':
+                    createProfileTrendsChart();
+                    break;
+                case 'geoDistribution':
+                    createGeoDistributionChart();
+                    break;
+                case 'engagement':
+                    createEngagementChart();
+                    break;
+                case 'household':
+                    createHouseholdChart();
+                    break;
+            }
+        }
+
+        function updateCharts() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            const profileStatus = document.getElementById('profileStatus').value;
+            const followUp = document.getElementById('followUp').value;
+            
+            if (!startDate || !endDate) {
+                alert('Please select both a start date and an end date.');
+                return;
+            }
+            
+            console.log('Refreshing data with params:', { start_date: startDate, end_date: endDate });
+            
+            const refreshParams = {
+                start_date: startDate,
+                end_date: endDate
+            };
+            
+            // Show loading state
+            const overlay = document.querySelector('div[style*="position: fixed"]');
+            if (overlay) overlay.style.display = 'flex';
+            
+            window.ReportApp.refresh(refreshParams).then(function(data) {
+                // Transform data to __reportData format
+                window.__reportData = { datasources: {}, currentParams: refreshParams };
+                Object.keys(data).forEach(dsName => {
+                    const ds = data[dsName];
+                    const rowsAsObjects = ds.rows ? ds.rows.map(row => rowArrayToObject(row, ds.columns)) : [];
+                    window.__reportData.datasources[dsName] = { data: { columns: ds.columns, rows: rowsAsObjects } };
+                });
+                loadData();
+            }).catch(function(error) {
+                console.error('Refresh failed:', error);
+                alert('Failed to refresh data: ' + error.message);
+            }).finally(function() {
+                if (overlay) overlay.style.display = 'none';
+            });
+        }
+
+        function resetCharts() {
+            const today = new Date();
+            const thirtyDaysAgo = new Date(today);
+            thirtyDaysAgo.setDate(today.getDate() - 30);
+            document.getElementById('startDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+            document.getElementById('endDate').value = today.toISOString().split('T')[0];
+            document.getElementById('profileStatus').value = '';
+            document.getElementById('followUp').value = '';
+            
+            // Reset chart types to default
+            Object.keys(chartConfig).forEach(key => {
+                if (key === 'geoDistribution') {
+                    chartConfig[key].type = 'bar';
+                } else if (key === 'household') {
+                    chartConfig[key].type = 'scatter';
+                } else {
+                    chartConfig[key].type = 'line';
+                }
+            });
+            
+            // Reset buttons
+            document.querySelectorAll('.chart-controls .chart-btn').forEach((btn, i) => {
+                if (i % 3 === 0) { // First button in each group
+                    btn.classList.add('active');
+                    btn.classList.remove('secondary');
+                } else {
+                    btn.classList.remove('active');
+                    btn.classList.add('secondary');
+                }
+            });
+            
+            // Redraw all charts
+            Object.keys(chartConfig).forEach(drawChart);
+        }
+
+        function populateTable() {
+            const tableBody = document.querySelector('#seekerTable tbody');
+            
+            if (!activityData || activityData.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="6">No seeker activity data available</td></tr>';
+                return;
+            }
+
+            let html = '';
+            activityData.slice(0, 10).forEach(row => {
+                html += `<tr>
+                    <td>${row.seeker_id || 'N/A'}</td>
+                    <td>${(row.first_name || '') + ' ' + (row.last_name || '') || 'Unknown'}</td>
+                    <td>${row.profile_created ? new Date(row.profile_created).toLocaleDateString() : 'N/A'}</td>
+                    <td>${row.referral_count || 0}</td>
+                    <td>${row.program_count || 0}</td>
+                    <td>${row.first_referral ? new Date(row.first_referral).toLocaleDateString() : 'N/A'}</td>
+                </tr>`;
+            });
+            
+            if (activityData.length > 10) {
+                html += `<tr><td colspan="6" style="text-align: center; color: #7f8c8d;">
+                    ... and ${activityData.length - 10} more seekers
+                </td></tr>`;
+            }
+            
+            tableBody.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
