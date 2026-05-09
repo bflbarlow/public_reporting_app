@@ -15,13 +15,22 @@
             // Load configuration from window.ReportConfig
             if (window.ReportConfig) {
                 this.config = window.ReportConfig;
-                this.params = this.config.params || {};
+                
+                // Parse params JSON string (it's stored as a string in the HTML)
+                try {
+                    this.params = JSON.parse(this.config.params) || {};
+                } catch (e) {
+                    console.error('Failed to parse ReportConfig.params:', e, 'Raw value:', this.config.params);
+                    this.params = {};
+                }
             } else {
                 console.error('ReportConfig not found in window');
                 this.config = {};
+                this.params = {};
             }
             
             console.log('Thick client initialized for report:', this.config.reportId);
+            console.log('Initial params loaded:', this.params);
         },
         
         getParam(key) {
@@ -50,9 +59,20 @@
         async refresh(newParams = {}) {
             console.log('Refresh requested with params:', newParams);
             
-            // Merge new params with current params
+            // Get current params and filter out immutable parameters
             const currentParams = DataStore.getParams();
-            const paramsToSend = { ...currentParams, ...newParams };
+            const mutableCurrentParams = {};
+            
+            // Only include mutable parameters in the refresh request
+            // Immutable parameters must remain in the URL only (HMAC-protected)
+            for (const [key, value] of Object.entries(currentParams)) {
+                if (DataStore.isMutable(key)) {
+                    mutableCurrentParams[key] = value;
+                }
+            }
+            
+            // Merge new params with filtered mutable params
+            const paramsToSend = { ...mutableCurrentParams, ...newParams };
             
             // Build refresh URL
             const currentUrl = DataStore.config.currentUrl;
@@ -61,13 +81,14 @@
             }
             
             try {
-                // Make refresh request
+                // Make refresh request - send ONLY mutable parameters (including empties)
+                // Immutable parameters come from the URL only
                 const response = await fetch('/refresh?' + currentUrl.split('?')[1], {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ params: newParams })
+                    body: JSON.stringify({ params: paramsToSend })
                 });
                 
                 if (!response.ok) {

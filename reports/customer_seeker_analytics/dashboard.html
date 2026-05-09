@@ -141,6 +141,10 @@
         .chart-btn.secondary:hover {
             background: #6c7b7d;
         }
+        .chart-btn.active {
+            background: #4a55d4;
+            box-shadow: 0 0 0 2px #4a55d4;
+        }
         .data-summary {
             background: white;
             border-radius: 8px;
@@ -478,6 +482,12 @@
             autoRefreshStartDateInput.addEventListener('change', scheduleAutoRefresh);
             autoRefreshEndDateInput.addEventListener('input', scheduleAutoRefresh);
             autoRefreshEndDateInput.addEventListener('change', scheduleAutoRefresh);
+
+            // Auto-refresh on filter select changes
+            const profileStatusSelect = document.getElementById('profileStatus');
+            const followUpSelect = document.getElementById('followUp');
+            profileStatusSelect.addEventListener('change', scheduleAutoRefresh);
+            followUpSelect.addEventListener('change', scheduleAutoRefresh);
             
             // Setup chart type buttons
             document.querySelectorAll('.chart-controls .chart-btn').forEach(btn => {
@@ -995,12 +1005,15 @@
                 return;
             }
             
-            console.log('Refreshing data with params:', { start_date: startDate, end_date: endDate });
+            console.log('Refreshing data with params:', { start_date: startDate, end_date: endDate, profile_status: profileStatus, follow_up: followUp });
             
             const refreshParams = {
                 start_date: startDate,
                 end_date: endDate
             };
+            
+            if (profileStatus) refreshParams.profile_status = profileStatus;
+            if (followUp) refreshParams.follow_up = followUp;
             
             // Show loading state
             const overlay = document.querySelector('div[style*="position: fixed"]');
@@ -1058,6 +1071,13 @@
             Object.keys(chartConfig).forEach(drawChart);
         }
 
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return 'N/A';
+            const div = document.createElement('div');
+            div.textContent = String(str);
+            return div.innerHTML;
+        }
+
         function populateTable() {
             const tableBody = document.querySelector('#seekerTable tbody');
             
@@ -1068,20 +1088,20 @@
 
             let html = '';
             activityData.slice(0, 10).forEach(row => {
-                html += `<tr>
-                    <td>${row.seeker_id || 'N/A'}</td>
-                    <td>${(row.first_name || '') + ' ' + (row.last_name || '') || 'Unknown'}</td>
-                    <td>${row.profile_created ? new Date(row.profile_created).toLocaleDateString() : 'N/A'}</td>
-                    <td>${row.referral_count || 0}</td>
-                    <td>${row.program_count || 0}</td>
-                    <td>${row.first_referral ? new Date(row.first_referral).toLocaleDateString() : 'N/A'}</td>
-                </tr>`;
+                html += '<tr>';
+                html += '<td>' + escapeHtml(row.seeker_id) + '</td>';
+                html += '<td>' + escapeHtml((row.first_name || '') + ' ' + (row.last_name || '')) + '</td>';
+                html += '<td>' + (row.profile_created ? new Date(row.profile_created).toLocaleDateString() : 'N/A') + '</td>';
+                html += '<td>' + (row.referral_count || 0) + '</td>';
+                html += '<td>' + (row.program_count || 0) + '</td>';
+                html += '<td>' + (row.first_referral ? new Date(row.first_referral).toLocaleDateString() : 'N/A') + '</td>';
+                html += '</tr>';
             });
             
             if (activityData.length > 10) {
-                html += `<tr><td colspan="6" style="text-align: center; color: #7f8c8d;">
-                    ... and ${activityData.length - 10} more seekers
-                </td></tr>`;
+                html += '<tr><td colspan="6" style="text-align: center; color: #7f8c8d;">';
+                html += '... and ' + (activityData.length - 10) + ' more seekers';
+                html += '</td></tr>';
             }
             
             tableBody.innerHTML = html;

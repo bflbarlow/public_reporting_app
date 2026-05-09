@@ -15,6 +15,8 @@ immutable_params:
 mutable_params:
   - start_date
   - end_date
+  - profile_status
+  - follow_up
 
 # organization_id is omitted from the queries on purpose. Do not include them back in.
 # Datasources - named SQL queries
@@ -29,7 +31,9 @@ datasources:
         AVG(CASE WHEN is_archived = 'active' THEN 1 ELSE 0 END) * 100 AS active_rate,
         AVG(CASE WHEN follow_up = 1 THEN 1 ELSE 0 END) * 100 AS follow_up_rate
       FROM seeker_profiles
-      WHERE seeker_profile_created_at BETWEEN {{start_date}} AND {{end_date}}
+      WHERE seeker_profile_created_at BETWEEN COALESCE({{start_date}}, '2024-01-01') AND COALESCE({{end_date}}, '2027-01-01')
+        AND ({{profile_status}} IS NULL OR is_archived = {{profile_status}})
+        AND ({{follow_up}} IS NULL OR follow_up = {{follow_up}})
       GROUP BY DATE(seeker_profile_created_at)
       ORDER BY profile_date
     cache_ttl: 300
@@ -46,8 +50,10 @@ datasources:
         AVG(CASE WHEN r.referral_status = 'Completed' THEN 1 ELSE 0 END) * 100 AS referral_completion_rate
       FROM seeker_profiles sp
       LEFT JOIN referrals r ON sp.seeker_id = r.seeker_id
-        AND r.referral_date BETWEEN {{start_date}} AND {{end_date}}
-      WHERE sp.seeker_profile_created_at BETWEEN {{start_date}} AND {{end_date}}
+        AND r.referral_date BETWEEN COALESCE({{start_date}}, '2024-01-01') AND COALESCE({{end_date}}, '2027-01-01')
+      WHERE sp.seeker_profile_created_at BETWEEN COALESCE({{start_date}}, '2024-01-01') AND COALESCE({{end_date}}, '2027-01-01')
+        AND ({{profile_status}} IS NULL OR sp.is_archived = {{profile_status}})
+        AND ({{follow_up}} IS NULL OR sp.follow_up = {{follow_up}})
       GROUP BY sp.subdomain
       HAVING COUNT(*) > 0
       ORDER BY seeker_count DESC
@@ -71,8 +77,10 @@ datasources:
           END AS referral_success_rate
         FROM seeker_profiles sp
         LEFT JOIN referrals r ON sp.seeker_id = r.seeker_id
-          AND r.referral_date BETWEEN {{start_date}} AND {{end_date}}
-        WHERE sp.seeker_profile_created_at BETWEEN {{start_date}} AND {{end_date}}
+          AND r.referral_date BETWEEN COALESCE({{start_date}}, '2024-01-01') AND COALESCE({{end_date}}, '2027-01-01')
+        WHERE sp.seeker_profile_created_at BETWEEN COALESCE({{start_date}}, '2024-01-01') AND COALESCE({{end_date}}, '2027-01-01')
+          AND ({{profile_status}} IS NULL OR sp.is_archived = {{profile_status}})
+          AND ({{follow_up}} IS NULL OR sp.follow_up = {{follow_up}})
         GROUP BY DATE_FORMAT(sp.seeker_profile_created_at, '%Y-%m')
       )
       SELECT * FROM engagement_data
@@ -99,7 +107,7 @@ datasources:
           END AS completion_rate
         FROM referrals r
         LEFT JOIN programs p ON r.program_numeric_id = p.program_numeric_id
-        WHERE r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+        WHERE r.referral_date BETWEEN COALESCE({{start_date}}, '2024-01-01') AND COALESCE({{end_date}}, '2027-01-01')
         GROUP BY p.program_numeric_id, p.program_name, p.categories
         HAVING COUNT(DISTINCT r.id_referrals) > 0
       )
@@ -131,8 +139,10 @@ datasources:
         COUNT(DISTINCT r.program_numeric_id) AS program_count
       FROM seeker_profiles sp
       LEFT JOIN referrals r ON sp.seeker_id = r.seeker_id
-        AND r.referral_date BETWEEN {{start_date}} AND {{end_date}}
-      WHERE sp.seeker_profile_created_at BETWEEN {{start_date}} AND {{end_date}}
+        AND r.referral_date BETWEEN COALESCE({{start_date}}, '2024-01-01') AND COALESCE({{end_date}}, '2027-01-01')
+      WHERE sp.seeker_profile_created_at BETWEEN COALESCE({{start_date}}, '2024-01-01') AND COALESCE({{end_date}}, '2027-01-01')
+        AND ({{profile_status}} IS NULL OR sp.is_archived = {{profile_status}})
+        AND ({{follow_up}} IS NULL OR sp.follow_up = {{follow_up}})
       GROUP BY sp.seeker_id, sp.first_name, sp.last_name, sp.seeker_profile_created_at
       HAVING COUNT(r.id_referrals) > 0
       ORDER BY referral_count DESC
