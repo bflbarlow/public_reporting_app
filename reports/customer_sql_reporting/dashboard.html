@@ -8,7 +8,8 @@
     <!-- Load Plotly.js from CDN -->
     <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
     
-    <!-- Thick Client is automatically injected by the server -->
+    <!-- Thick Client: data bridge between reporting_app and reports -->
+    <script src="/static/thick_client.js"></script>
     
     <style>
         * {
@@ -634,22 +635,105 @@
                 return;
             }
             
-            // Prepare hierarchical data
+            // Prepare hierarchical data for sunburst
+            // We need to build a tree structure where parent values = sum of children
+            
+            // Create a tree structure to organize nodes
+            const tree = {};
+            const nodeValues = {};
+            const nodeSeekers = {};
+            const nodeLabels = {};
+            
+            // Process leaf nodes from data
+            sunburstData.forEach(row => {
+                const path = row.hierarchy_path;
+                const parts = path.split('|');
+                
+                // Store leaf node values
+                nodeValues[path] = row.value;
+                nodeSeekers[path] = row.unique_seekers;
+                nodeLabels[path] = row.level4;
+                
+                // Build parent paths
+                let currentPath = '';
+                for (let i = 0; i < parts.length; i++) {
+                    if (currentPath) currentPath += '|' + parts[i];
+                    else currentPath = parts[i];
+                    
+                    const parentPath = i > 0 ? path.substring(0, path.lastIndexOf('|' + parts[i])) : '';
+                    
+                    // Initialize tree node if not exists
+                    if (!tree[currentPath]) {
+                        tree[currentPath] = { children: new Set(), parent: parentPath };
+                        nodeLabels[currentPath] = parts[i];
+                    }
+                    
+                    // Add to parent's children
+                    if (parentPath && tree[parentPath]) {
+                        tree[parentPath].children.add(currentPath);
+                    }
+                }
+            });
+            
+            // Calculate parent values by summing children (bottom-up)
+            function calculateParentValues(nodePath) {
+                const node = tree[nodePath];
+                if (!node) return 0;
+                
+                // If leaf node, return its value
+                if (nodeValues[nodePath] !== undefined) {
+                    return nodeValues[nodePath];
+                }
+                
+                // For parent nodes, sum children values
+                let sum = 0;
+                let seekerSum = 0;
+                node.children.forEach(childPath => {
+                    const childValue = calculateParentValues(childPath);
+                    sum += childValue;
+                    // For seekers, we might want max or sum depending on interpretation
+                    // Since seekers are distinct counts, we need to handle this differently
+                    if (nodeSeekers[childPath] !== undefined) {
+                        seekerSum += nodeSeekers[childPath];
+                    }
+                });
+                
+                nodeValues[nodePath] = sum;
+                nodeSeekers[nodePath] = seekerSum;
+                return sum;
+            }
+            
+            // Calculate root value (sum of all top-level nodes)
+            let rootValue = 0;
+            const rootId = 'All Programs';
+            nodeLabels[rootId] = 'All Programs';
+            tree[rootId] = { children: new Set(), parent: '' };
+            
+            // Find top-level nodes (nodes with empty parent)
+            Object.keys(tree).forEach(path => {
+                if (path !== rootId && (!tree[path].parent || tree[path].parent === '')) {
+                    tree[rootId].children.add(path);
+                    tree[path].parent = rootId;
+                }
+            });
+            
+            // Calculate all values
+            calculateParentValues(rootId);
+            
+            // Build arrays for Plotly
             const ids = [];
             const labels = [];
             const parents = [];
             const values = [];
             const seekers = [];
             
-            sunburstData.forEach(row => {
-                const id = row.hierarchy_path;
-                const parentPath = row.hierarchy_path.substring(0, row.hierarchy_path.lastIndexOf('|'));
-                
-                ids.push(id);
-                labels.push(row.level4);
-                parents.push(parentPath || '');
-                values.push(row.value);
-                seekers.push(row.unique_seekers);
+            // Add all nodes to arrays
+            Object.keys(tree).forEach(path => {
+                ids.push(path);
+                labels.push(nodeLabels[path] || path);
+                parents.push(tree[path].parent || '');
+                values.push(nodeValues[path] || 0);
+                seekers.push(nodeSeekers[path] || 0);
             });
             
             const trace = {
@@ -786,24 +870,31 @@
             const trace = {
                 type: 'scatter3d',
                 mode: 'markers',
-                x: scatterData.map(d => new Date(d.assessment_date).getTime()),
+                x: scatterData.map(d => new Date(d.assessment_month).getTime()),
                 y: scatterData.map(d => d.question_complexity || 0),
                 z: scatterData.map(d => d.domain_count || 0),
-                text: scatterData.map(d => 
-                    `Date: ${d.assessment_date}<br>` +
-                    `Complexity: ${d.question_complexity}<br>` +
-                    `Domains: ${d.domain_count}<br>` +
-                    `Avg Score: ${d.avg_score?.toFixed(2)}<br>` +
-                    `Referrals: ${d.referral_count}<br>` +
-                    `Program Diversity: ${d.program_diversity}`
-                ),
+                text: scatterData.map(d => {
+                    const month = d.assessment_month;
+                    const date = new Date(month);
+                    const monthName = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                    const completionRate = d.completion_rate || 0;
+                    const completionPercent = typeof completionRate === 'number' ? (completionRate * 100).toFixed(1) + '%' : 'N/A';
+                    
+                    return `Month: ${monthName}<br>` +
+                           `Complexity: ${d.question_complexity}<br>` +
+                           `Domains: ${d.domain_count}<br>` +
+                           `Avg Score: ${typeof d.avg_score === 'number' ? d.avg_score.toFixed(2) : d.avg_score || 'N/A'}<br>` +
+                           `Referrals: ${d.referral_count}<br>` +
+                           `Program Diversity: ${d.program_diversity}<br>` +
+                           `Completion: ${completionPercent}`;
+                }),
                 marker: {
                     size: scatterData.map(d => Math.max(5, Math.sqrt(d.seeker_count) * 3)),
                     color: scatterData.map(d => d.completion_rate || 0),
                     colorscale: 'Viridis',
                     showscale: true,
                     colorbar: {
-                        title: 'Completion',
+                        title: 'Completion Rate',
                         tickformat: '.0%' 
                     },
                     opacity: 0.8
@@ -819,8 +910,8 @@
                 font: { size: 12 },
                 scene: {
                     xaxis: {
-                        title: 'Date',
-                        tickformat: '%Y-%m-%d'
+                        title: 'Month',
+                        type: 'date'
                     },
                     yaxis: {
                         title: 'Question Complexity'
@@ -958,7 +1049,9 @@
                 
             } catch (error) {
                 console.error('Failed to load data:', error);
-                showError('Failed to load data', error.message);
+                console.error('Error stack:', error.stack);
+                // Try to get the raw response if available
+                showError('Failed to load data', error.message || String(error));
             } finally {
                 hideLoading();
             }
@@ -970,8 +1063,20 @@
             
             // Check thick client availability
             if (!window.ReportApp || typeof window.ReportApp.refresh !== 'function') {
-                showError('Thick client not available', 'Ensure you are accessing through the reporting app.');
+                console.error('ERROR: Thick client (window.ReportApp) not available.');
+                console.error('ReportApp:', window.ReportApp);
+                console.error('ReportConfig:', window.ReportConfig);
+                showError('Thick client not available', 'window.ReportApp is not defined. Check that thick_client.js is loaded and ReportConfig is set. Console for details.');
                 return;
+            }
+            
+            // Check thick client data store
+            console.log('Thick client available. ReportConfig:', window.ReportConfig);
+            try {
+                const configParams = JSON.parse(window.ReportConfig.params);
+                console.log('Config params:', configParams);
+            } catch(e) {
+                console.error('Failed to parse ReportConfig.params:', e);
             }
             
             // Parse report configuration

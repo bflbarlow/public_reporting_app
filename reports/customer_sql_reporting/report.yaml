@@ -22,7 +22,7 @@ max_rows: 10000                         # Maximum rows returned per datasource
 # These CANNOT be changed by users once URL is signed
 # Typically includes: organization_id, user_id, tenant_id, etc.
 immutable_params:
-  - organization_id                    # REQUIRED for data isolation
+  - organization_id                    # DO NOT ADD THIS PARAM TO SQL
   
 # Mutable parameters: Can be changed by users via UI
 # These are NOT included in HMAC signature
@@ -38,6 +38,7 @@ mutable_params:
 # -------------------------
 # Each datasource will be available in the thick client response
 # Use {{parameter_name}} syntax for parameter substitution
+# DO NOT ADD organization_id param to the sql filters
 datasources:
   
   # Customer Journey Sankey Diagram Data
@@ -85,7 +86,7 @@ datasources:
         LEFT JOIN programs p ON r.program_numeric_id = p.program_numeric_id
         WHERE r.referral_date BETWEEN {{start_date}} AND {{end_date}}
           AND ({{program_category}} IS NULL OR p.categories LIKE CONCAT('%', {{program_category}}, '%'))
-          AND ({{referral_status_filter}} IS NULL OR r.referral_status = {{referral_status_filter}})
+          AND ({{referral_status_filter}} IS NULL OR r.referral_status IS NULL OR r.referral_status = {{referral_status_filter}})
         GROUP BY COALESCE(p.categories, 'Uncategorized'), COALESCE(r.referral_status, 'No Status')
       )
       SELECT * FROM journey_steps
@@ -112,7 +113,7 @@ datasources:
         WHERE a.created_at BETWEEN {{start_date}} AND {{end_date}}
           AND ({{domain_filter}} IS NULL OR a.domains = {{domain_filter}})
           AND ({{program_category}} IS NULL OR p.categories LIKE CONCAT('%', {{program_category}}, '%'))
-          AND ({{referral_status_filter}} IS NULL OR r.referral_status = {{referral_status_filter}})
+          AND ({{referral_status_filter}} IS NULL OR r.referral_status IS NULL OR r.referral_status = {{referral_status_filter}})
         GROUP BY
           COALESCE(NULLIF(a.domains, ''), 'No Domain'),
           COALESCE(p.categories, 'Uncategorized'),
@@ -149,7 +150,7 @@ datasources:
       WHERE a.created_at BETWEEN {{start_date}} AND {{end_date}}
         AND ({{domain_filter}} IS NULL OR a.domains = {{domain_filter}})
         AND ({{program_category}} IS NULL OR p.categories LIKE CONCAT('%', {{program_category}}, '%'))
-        AND ({{referral_status_filter}} IS NULL OR r.referral_status = {{referral_status_filter}})
+        AND ({{referral_status_filter}} IS NULL OR r.referral_status IS NULL OR r.referral_status = {{referral_status_filter}})
       GROUP BY a.seeker_id
       HAVING COUNT(DISTINCT a.id_assessments) > 0
       ORDER BY assessment_count DESC
@@ -160,12 +161,12 @@ datasources:
   scatter_3d:
     sql: |
       SELECT
-        DATE(a.created_at) AS assessment_date,
+        DATE_FORMAT(a.created_at, '%Y-%m-01') AS assessment_month,
         COUNT(DISTINCT a.question_unique_id) AS question_complexity,
         COUNT(DISTINCT a.domains) AS domain_count,
         AVG(a.answer_score) AS avg_score,
         COUNT(DISTINCT r.id_referrals) AS referral_count,
-        MAX(CASE WHEN r.referral_status = 'Completed' THEN 1 ELSE 0 END) AS completion_rate,
+        AVG(CASE WHEN r.referral_status = 'Completed' THEN 1 ELSE 0 END) AS completion_rate,
         COUNT(DISTINCT p.program_numeric_id) AS program_diversity,
         COUNT(DISTINCT a.seeker_id) AS seeker_count
       FROM assessments a
@@ -175,10 +176,10 @@ datasources:
       WHERE a.created_at BETWEEN {{start_date}} AND {{end_date}}
         AND ({{domain_filter}} IS NULL OR a.domains = {{domain_filter}})
         AND ({{program_category}} IS NULL OR p.categories LIKE CONCAT('%', {{program_category}}, '%'))
-      GROUP BY DATE(a.created_at)
+      GROUP BY DATE_FORMAT(a.created_at, '%Y-%m-01')
       HAVING COUNT(DISTINCT a.id_assessments) > 0
-      ORDER BY assessment_date
-    row_limit: 100
+      ORDER BY assessment_month
+    row_limit: 10000
     cache_ttl: 600
     description: "3D scatter plot data: time, complexity, and outcome metrics"
 

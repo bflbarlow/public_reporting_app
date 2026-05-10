@@ -1,0 +1,97 @@
+id: referral_funnel_dashboard
+name: "Referral Funnel & Engagement Dashboard"
+description: "End-to-end view of referrals, statuses, and seeker engagement."
+database: customer_sql
+visibility: public
+expires_after: 3600
+max_rows: 20000
+
+immutable_params:
+  - organization_id
+
+mutable_params:
+  - start_date
+  - end_date
+
+datasources:
+  referral_funnel:
+    sql: |
+      SELECT
+        p.program_numeric_id,
+        p.program_name,
+        COUNT(DISTINCT r.referral_id) AS total_referrals,
+        SUM(CASE WHEN rs.latest_status = 'Created' THEN 1 ELSE 0 END) AS created_count,
+        SUM(CASE WHEN rs.latest_status = 'In Progress' THEN 1 ELSE 0 END) AS in_progress_count,
+        SUM(CASE WHEN rs.latest_status = 'Completed' THEN 1 ELSE 0 END) AS completed_count,
+        SUM(CASE WHEN rs.latest_status = 'Cancelled' THEN 1 ELSE 0 END) AS cancelled_count
+      FROM referrals r
+      JOIN programs p
+        ON r.program_numeric_id = p.program_numeric_id
+      JOIN (
+        SELECT
+          rs.referral_id,
+          SUBSTRING_INDEX(
+            GROUP_CONCAT(rs.status ORDER BY rs.status_date DESC),
+            ',', 1
+          ) AS latest_status
+        FROM referral_status rs
+        WHERE rs.status_date BETWEEN {{start_date}} AND {{end_date}}
+        GROUP BY rs.referral_id
+      ) rs
+        ON rs.referral_id = r.referral_id
+      WHERE r.created_at BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY p.program_numeric_id, p.program_name
+      ORDER BY total_referrals DESC
+    row_limit: 500
+    cache_ttl: 300
+
+  referral_velocity:
+    sql: |
+      SELECT
+        r.referral_id,
+        p.program_name,
+        MIN(rs.status_date) AS first_status_date,
+        MAX(rs.status_date) AS last_status_date,
+        TIMESTAMPDIFF(
+          DAY,
+          MIN(rs.status_date),
+          MAX(rs.status_date)
+        ) AS days_to_latest_status
+      FROM referrals r
+      JOIN programs p
+        ON r.program_numeric_id = p.program_numeric_id
+      JOIN referral_status rs
+        ON rs.referral_id = r.referral_id
+      WHERE rs.status_date BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY r.referral_id, p.program_name
+      ORDER BY days_to_latest_status DESC
+      LIMIT 1000
+    row_limit: 1000
+    cache_ttl: 300
+
+  seeker_engagement:
+    sql: |
+      SELECT
+        sp.seeker_id,
+        sp.seeker_profile_id,
+        COUNT(DISTINCT g.id_goals) AS goals_count,
+        COUNT(DISTINCT n.id_notes) AS notes_count,
+        COUNT(DISTINCT ua.id_user_activity) AS activity_events,
+        MIN(ua.activity_entry_date) AS first_activity_date,
+        MAX(ua.activity_entry_date) AS last_activity_date
+      FROM seeker_profiles sp
+      LEFT JOIN goals g
+        ON g.seeker_id = sp.seeker_id
+       AND g.seeker_profile_id = sp.seeker_profile_id
+      LEFT JOIN notes n
+        ON n.seeker_id = sp.seeker_id
+      LEFT JOIN user_activity ua
+        ON ua.user_id = sp.seeker_id
+       AND ua.activity_entry_date BETWEEN {{start_date}} AND {{end_date}}
+      GROUP BY
+        sp.seeker_id,
+        sp.seeker_profile_id
+      ORDER BY activity_events DESC
+      LIMIT 2000
+    row_limit: 2000
+    cache_ttl: 300

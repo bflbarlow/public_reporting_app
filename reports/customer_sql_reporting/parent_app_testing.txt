@@ -1,0 +1,10 @@
+customer_sql_reporting
+
+{"organization_id": "1"}
+
+{"start_date": "2024-01-01",
+"end_date": "2027-01-01",
+"domain_filter": "",
+"program_category": "",
+"referral_status_filter": ""
+}
