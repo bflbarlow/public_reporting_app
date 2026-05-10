@@ -1,0 +1,184 @@
+# Program Analysis Dashboard - Advanced Chart.js Visualizations
+# ============================================================
+# This report showcases four advanced Chart.js chart types using customer SQL data:
+# 1. Radar chart with skip points: Program performance across categories
+# 2. Polar area chart with centered point labels: Referral status distribution
+# 3. Line chart with multiple datasets: Referral trends over time
+# 4. Stacked line chart: Referral volume by category over time
+
+# Basic Report Information
+# -----------------------
+id: program_analysis                    # Unique identifier (must match directory name)
+name: "Program Analysis Dashboard"      # Display name shown in UI
+description: "Advanced Chart.js visualizations of program performance and referral patterns"
+database: customer_sql                  # Customer database from databases.yaml
+visibility: public                     # "public" or "private"
+expires_after: 3600                    # URL expiration in seconds (1 hour)
+max_rows: 10000                        # Maximum rows returned per datasource
+
+# Parameter Configuration
+# -----------------------
+# Immutable parameters: Included in HMAC signature for security
+# These CANNOT be changed by users once URL is signed
+immutable_params:
+  - organization_id                    # DO NOT ADD TO DATASOURCE SQL
+  
+# Mutable parameters: Can be changed by users via UI
+# These are NOT included in HMAC signature
+# All mutable parameters must appear in URLs (can be empty)
+mutable_params:
+  - start_date                         # Start date for date range filters
+  - end_date                           # End date for date range filters
+  - status_filter                      # Optional: Filter by referral status
+  - category_filter                    # Optional: Filter by program category
+
+# Datasources (SQL Queries)
+# -------------------------
+# Each datasource will be available in the thick client response
+# Use {{parameter_name}} syntax for parameter substitution
+# DO NOT ADD ORGANIZATION ID TO DATASOURCES SQL
+datasources:
+  
+  # Radar chart: Program performance across categories
+  radar_metrics:
+    sql: |
+      WITH category_stats AS (
+        SELECT
+          COALESCE(NULLIF(p.categories, ''), 'Uncategorized') AS category,
+          COUNT(DISTINCT r.referral_id) AS total_referrals,
+          COUNT(DISTINCT r.seeker_id) AS unique_seekers,
+          SUM(CASE WHEN r.referral_status = 'Completed' THEN 1 ELSE 0 END) AS completed_referrals,
+          AVG(CASE WHEN r.referral_status = 'Completed' THEN 1.0 ELSE 0 END) AS completion_rate
+        FROM referrals r
+        LEFT JOIN programs p ON r.program_numeric_id = p.program_numeric_id
+        WHERE r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+          AND ({{status_filter}} IS NULL OR r.referral_status = {{status_filter}})
+          AND ({{category_filter}} IS NULL OR p.categories LIKE CONCAT('%', {{category_filter}}, '%'))
+        GROUP BY COALESCE(NULLIF(p.categories, ''), 'Uncategorized')
+      )
+      SELECT *
+      FROM category_stats
+      WHERE total_referrals > 0
+      ORDER BY total_referrals DESC
+    row_limit: 50
+    cache_ttl: 300
+    description: "Program category metrics for radar chart visualization"
+  
+  # Polar area chart: Referral status distribution
+  status_distribution:
+    sql: |
+      SELECT
+        COALESCE(NULLIF(r.referral_status, ''), 'No Status') AS status,
+        COUNT(*) AS count,
+        COUNT(*) * 100.0 / SUM(COUNT(*)) OVER () AS percentage
+      FROM referrals r
+      WHERE r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+        AND ({{category_filter}} IS NULL OR EXISTS (
+          SELECT 1 FROM programs p 
+          WHERE p.program_numeric_id = r.program_numeric_id 
+            AND p.categories LIKE CONCAT('%', {{category_filter}}, '%')
+        ))
+      GROUP BY COALESCE(NULLIF(r.referral_status, ''), 'No Status')
+      ORDER BY count DESC
+    row_limit: 20
+    description: "Referral status distribution for polar area chart"
+  
+  # Line chart datasets: Referral trends over time with multiple metrics
+  time_series_metrics:
+    sql: |
+      SELECT
+        DATE(r.referral_date) AS date,
+        COUNT(*) AS total_referrals,
+        SUM(CASE WHEN r.referral_status = 'Completed' THEN 1 ELSE 0 END) AS completed_referrals,
+        SUM(CASE WHEN r.referral_status = 'Submitted' THEN 1 ELSE 0 END) AS submitted_referrals,
+        SUM(CASE WHEN r.referral_status = 'In Review' THEN 1 ELSE 0 END) AS in_review_referrals,
+        COUNT(DISTINCT r.seeker_id) AS unique_seekers
+      FROM referrals r
+      WHERE r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+        AND ({{status_filter}} IS NULL OR r.referral_status = {{status_filter}})
+        AND ({{category_filter}} IS NULL OR EXISTS (
+          SELECT 1 FROM programs p 
+          WHERE p.program_numeric_id = r.program_numeric_id 
+            AND p.categories LIKE CONCAT('%', {{category_filter}}, '%')
+        ))
+      GROUP BY DATE(r.referral_date)
+      ORDER BY date
+    row_limit: 1000
+    cache_ttl: 600
+    description: "Daily referral metrics for line chart with multiple datasets"
+  
+  # Stacked line chart: Referral volume by category over time
+  category_time_series:
+    sql: |
+      SELECT
+        DATE(r.referral_date) AS date,
+        COALESCE(NULLIF(p.categories, ''), 'Uncategorized') AS category,
+        COUNT(*) AS referral_count
+      FROM referrals r
+      LEFT JOIN programs p ON r.program_numeric_id = p.program_numeric_id
+      WHERE r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+        AND ({{status_filter}} IS NULL OR r.referral_status = {{status_filter}})
+        AND ({{category_filter}} IS NULL OR p.categories LIKE CONCAT('%', {{category_filter}}, '%'))
+      GROUP BY DATE(r.referral_date), COALESCE(NULLIF(p.categories, ''), 'Uncategorized')
+      ORDER BY date, category
+    row_limit: 5000
+    cache_ttl: 600
+    description: "Daily referral counts by category for stacked line chart"
+  
+  # Summary statistics for dashboard cards
+  summary_stats:
+    sql: |
+      SELECT
+        COUNT(DISTINCT r.referral_id) AS total_referrals,
+        COUNT(DISTINCT r.seeker_id) AS unique_seekers,
+        COUNT(DISTINCT p.categories) AS unique_categories,
+        AVG(CASE WHEN r.referral_status = 'Completed' THEN 1.0 ELSE 0 END) AS overall_completion_rate,
+        MIN(r.referral_date) AS first_referral_date,
+        MAX(r.referral_date) AS last_referral_date
+      FROM referrals r
+      LEFT JOIN programs p ON r.program_numeric_id = p.program_numeric_id
+      WHERE r.referral_date BETWEEN {{start_date}} AND {{end_date}}
+        AND ({{status_filter}} IS NULL OR r.referral_status = {{status_filter}})
+        AND ({{category_filter}} IS NULL OR p.categories LIKE CONCAT('%', {{category_filter}}, '%'))
+    row_limit: 100
+    cache_ttl: 300
+    description: "Summary statistics for dashboard cards"
+
+# Best Practices Guide
+# ====================
+#
+# 1. SECURITY:
+#    - ALWAYS include organization_id = {{organization_id}} in WHERE clause
+#    - For JOINs, add organization_id filter to each table
+#    - Never expose raw SQL in client-side code
+#
+# 2. PERFORMANCE:
+#    - Use appropriate indexes on organization_id, date columns
+#    - Set row_limit to reasonable values (default 10000)
+#    - Use cache_ttl for frequently accessed, slow-changing data
+#    - Consider pagination for large datasets (>1000 rows)
+#
+# 3. PARAMETER USAGE:
+#    - All parameters referenced in SQL must be declared above
+#    - Immutable parameters: For security & data isolation
+#    - Mutable parameters: For user-adjustable filters
+#    - ALL mutable parameters must appear in URLs (can be empty)
+#    - Empty values become SQL NULL - use: WHERE ({{param}} IS NULL OR column = {{param}})
+#
+# 4. ERROR HANDLING:
+#    - Test queries with NULL/empty parameter values
+#    - Ensure date ranges are valid (start_date <= end_date)
+#    - Handle missing data gracefully in dashboard.html
+#    - Design queries to handle optional filters: WHERE ({{param}} IS NULL OR column = {{param}})
+#
+# 5. TESTING:
+#    - Generate test URL: go run main.go -genurl -report report_template -params "organization_id=1,start_date=2024-01-01,end_date=2024-12-31"
+#    - Test with ENABLE_PUBLIC_PATHS=true for development
+#    - Verify data isolation by changing organization_id
+#
+# Next Steps:
+# 1. Copy this directory: cp -r reports/report_template reports/my_new_report
+# 2. Update id, name, description in report.yaml
+# 3. Replace SQL queries with your actual queries
+# 4. Update dashboard.html with your visualizations
+# 5. Test your report thoroughly

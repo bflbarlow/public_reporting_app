@@ -1,0 +1,57 @@
+id: referral_reactor
+name: "Referral Reactor Core"
+description: "A pulsing energy-core visualization of referrals, programs, and engagement."
+database: customer_sql
+visibility: public
+expires_after: 3600
+max_rows: 8000
+
+datasources:
+  reactor_data:
+    sql: |
+      SELECT
+        r.referral_id,
+        r.seeker_id,
+        r.program_numeric_id,
+        p.program_name,
+        rs.latest_status,
+        rs.days_to_latest_status,
+        COALESCE(g.goal_count, 0) AS goals,
+        COALESCE(n.note_count, 0) AS notes,
+        COALESCE(a.activity_count, 0) AS activity
+      FROM referrals r
+      LEFT JOIN programs p
+        ON p.program_numeric_id = r.program_numeric_id
+      LEFT JOIN (
+        SELECT
+          referral_id,
+          SUBSTRING_INDEX(
+            GROUP_CONCAT(status ORDER BY status_date DESC),
+            ',', 1
+          ) AS latest_status,
+          TIMESTAMPDIFF(
+            DAY,
+            MIN(status_date),
+            MAX(status_date)
+          ) AS days_to_latest_status
+        FROM referral_status
+        GROUP BY referral_id
+      ) rs
+        ON rs.referral_id = r.referral_id
+      LEFT JOIN (
+        SELECT seeker_id, COUNT(*) AS goal_count
+        FROM goals GROUP BY seeker_id
+      ) g
+        ON g.seeker_id = r.seeker_id
+      LEFT JOIN (
+        SELECT seeker_id, COUNT(*) AS note_count
+        FROM notes GROUP BY seeker_id
+      ) n
+        ON n.seeker_id = r.seeker_id
+      LEFT JOIN (
+        SELECT user_id, COUNT(*) AS activity_count
+        FROM user_activity GROUP BY user_id
+      ) a
+        ON a.user_id = r.seeker_id
+    row_limit: 5000
+    cache_ttl: 300

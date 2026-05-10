@@ -1,0 +1,1965 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Program Analysis Dashboard - Advanced Visualizations</title>
+
+    <!-- Load Chart.js from CDN (Change to your preferred visualization library) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Thick Client is automatically injected by the server -->
+    <!-- No need to manually include thick_client.js -->
+
+    <style>
+        /* ==========================================================================
+           BASE STYLES
+           ========================================================================== */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+            padding: 20px;
+            transition: opacity 0.3s ease; /* For smooth loading transitions */
+        }
+
+        body.loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        /* ==========================================================================
+           LAYOUT & CONTAINERS
+           ========================================================================== */
+        .dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 28px 32px;
+            margin-bottom: 28px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            border-left: 6px solid #636efa;
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 8px;
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .header p {
+            color: #7f8c8d;
+            margin-bottom: 4px;
+            font-size: 16px;
+        }
+
+        .report-id {
+            font-family: monospace;
+            background: #f1f2f6;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #636efa;
+        }
+
+        /* ==========================================================================
+           FILTER CONTROLS
+           ========================================================================== */
+        .filters-container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 28px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: flex-end;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .filter-group label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #2c3e50;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .filter-group .param-type {
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+
+        .immutable-badge {
+            background: #ffeaa7;
+            color: #d35400;
+        }
+
+        .mutable-badge {
+            background: #a29bfe;
+            color: #2d3436;
+        }
+
+        .filter-group input,
+        .filter-group select {
+            padding: 10px 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: border-color 0.2s;
+            background: white;
+        }
+
+        .filter-group input:focus,
+        .filter-group select:focus {
+            outline: none;
+            border-color: #636efa;
+            box-shadow: 0 0 0 3px rgba(99, 110, 250, 0.1);
+        }
+
+        .filter-actions {
+            display: flex;
+            gap: 12px;
+            margin-left: auto;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #636efa;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #4a55d4;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: #7f8c8d;
+            color: white;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #6c7b7d;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        /* ==========================================================================
+           DATA SUMMARY CARDS
+           ========================================================================== */
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+            margin-bottom: 28px;
+        }
+
+        .summary-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            text-align: center;
+            transition: transform 0.2s;
+        }
+
+        .summary-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .summary-value {
+            font-size: 36px;
+            font-weight: 800;
+            color: #2c3e50;
+            margin-bottom: 8px;
+            line-height: 1;
+        }
+
+        .summary-label {
+            font-size: 14px;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* ==========================================================================
+           VISUALIZATION CONTAINERS
+           ========================================================================== */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+            gap: 28px;
+            margin-bottom: 28px;
+        }
+
+        .chart-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            height: 500px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-header {
+            margin-bottom: 20px;
+        }
+
+        .chart-title {
+            font-weight: 700;
+            color: #2c3e50;
+            font-size: 18px;
+            margin-bottom: 6px;
+        }
+
+        .chart-description {
+            color: #7f8c8d;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .chart-container {
+            flex: 1;
+            position: relative;
+            min-height: 0; /* Important for flex children */
+        }
+
+        .chart-wrapper {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        canvas {
+            width: 100% !important;
+            height: 100% !important;
+            display: block;
+        }
+
+        /* ==========================================================================
+           DATA TABLE
+           ========================================================================== */
+        .data-table-container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            margin-bottom: 28px;
+            overflow-x: auto;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .data-table th {
+            background: #f8f9fa;
+            padding: 14px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: #2c3e50;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .data-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #eee;
+            color: #333;
+        }
+
+        .data-table tr:hover td {
+            background: #f8f9fa;
+        }
+
+        /* ==========================================================================
+           LOADING & SKELETON STATES
+           ========================================================================== */
+        .skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 8px;
+        }
+
+        .skeleton-card {
+            height: 120px;
+        }
+
+        .skeleton-chart {
+            height: 400px;
+        }
+
+        .skeleton-row {
+            height: 40px;
+            margin-bottom: 10px;
+        }
+
+        @keyframes shimmer {
+            from { background-position: -200% 0; }
+            to { background-position: 200% 0; }
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.92);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+            backdrop-filter: blur(4px);
+        }
+
+        .loading-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #636efa;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* ==========================================================================
+           ERROR STATES
+           ========================================================================== */
+        .error-message {
+            background: #ffeaa7;
+            border-left: 6px solid #e17055;
+            padding: 20px 24px;
+            border-radius: 8px;
+            margin-bottom: 28px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        .error-title {
+            font-weight: 700;
+            color: #d35400;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .error-details {
+            color: #666;
+            font-size: 14px;
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.05);
+            padding: 12px;
+            border-radius: 4px;
+            margin-top: 12px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ==========================================================================
+           NO DATA STATE
+           ========================================================================== */
+        .no-data {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 400px;
+            color: #7f8c8d;
+            text-align: center;
+        }
+
+        .no-data-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        /* ==========================================================================
+           RESPONSIVE DESIGN
+           ========================================================================== */
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .chart-card {
+                height: 400px;
+            }
+
+            .filters-container {
+                flex-direction: column;
+            }
+
+            .filter-group {
+                min-width: 100%;
+            }
+
+            .filter-actions {
+                margin-left: 0;
+                width: 100%;
+                justify-content: stretch;
+            }
+
+            .btn {
+                flex: 1;
+                justify-content: center;
+            }
+        }
+
+        /* ==========================================================================
+           DEBUG PANEL (Development Only)
+           ========================================================================== */
+        .debug-panel {
+            background: #2d3436;
+            color: #dfe6e9;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 40px;
+            font-family: monospace;
+            font-size: 13px;
+            display: none; /* Hidden by default, enable in dev */
+        }
+
+        .debug-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #2d3436;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            z-index: 1000;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .debug-section {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #4a4a4a;
+        }
+
+        .debug-section-title {
+            color: #74b9ff;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .debug-item {
+            margin-bottom: 6px;
+            word-break: break-all;
+        }
+
+        .debug-label {
+            color: #81ecec;
+            display: inline-block;
+            min-width: 180px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div style="text-align: center;">
+            <div class="spinner"></div>
+            <p style="color: #2c3e50; font-weight: 600; font-size: 16px;">Loading report data...</p>
+            <p style="color: #7f8c8d; font-size: 14px; margin-top: 8px;">Fetching data via thick client</p>
+        </div>
+    </div>
+
+    <!-- Error Message Container -->
+    <div id="error-message" class="error-message">
+        <div class="error-title">⚠️ Error Loading Data</div>
+        <div id="error-details" class="error-details"></div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div class="dashboard">
+        <!-- Header -->
+        <div class="header">
+            <h1 id="report-title">Program Analysis Dashboard</h1>
+            <p id="report-description">Advanced Chart.js visualizations of program performance and referral patterns</p>
+            <p>Report ID: <span id="report-id" class="report-id">program_analysis</span></p>
+        </div>
+
+        <!-- Filter Controls -->
+        <div class="filters-container">
+            <!-- Start Date Filter -->
+            <div class="filter-group">
+                <label for="start-date">
+                    Start Date
+                    <span class="param-type mutable-badge">Mutable</span>
+                </label>
+                <input type="date" id="start-date" placeholder="YYYY-MM-DD">
+            </div>
+
+            <!-- End Date Filter -->
+            <div class="filter-group">
+                <label for="end-date">
+                    End Date
+                    <span class="param-type mutable-badge">Mutable</span>
+                </label>
+                <input type="date" id="end-date" placeholder="YYYY-MM-DD">
+            </div>
+
+            <!-- Status Filter -->
+            <div class="filter-group">
+                <label for="status-filter">
+                    Referral Status
+                    <span class="param-type mutable-badge">Mutable</span>
+                </label>
+                <select id="status-filter">
+                    <option value="">All Statuses</option>
+                    <option value="Submitted">Submitted</option>
+                    <option value="In Review">In Review</option>
+                    <option value="Completed">Completed</option>
+                    <option value="accepted">Accepted</option>
+                    <option value="cancelled">Cancelled</option>
+                    <option value="closed">Closed</option>
+                    <option value="in-progress">In Progress</option>
+                    <option value="on-hold">On Hold</option>
+                    <option value="pending">Pending</option>
+                    <option value="rescinded">Rescinded</option>
+                </select>
+            </div>
+
+            <!-- Category Filter -->
+            <div class="filter-group">
+                <label for="category-filter">
+                    Program Category
+                    <span class="param-type mutable-badge">Mutable</span>
+                </label>
+                <select id="category-filter">
+                    <option value="">All Categories</option>
+                    <option value="food">Food</option>
+                    <option value="housing">Housing</option>
+                    <option value="employment">Employment</option>
+                    <option value="health">Health</option>
+                    <option value="mental-health">Mental Health</option>
+                    <option value="substance-abuse">Substance Abuse</option>
+                    <option value="legal">Legal</option>
+                    <option value="transportation">Transportation</option>
+                    <option value="elderly-services">Elderly Services</option>
+                    <option value="childcare">Childcare</option>
+                    <option value="disability-services">Disability Services</option>
+                    <option value="immigrant-services">Immigrant Services</option>
+                    <option value="crisis-intervention">Crisis Intervention</option>
+                    <option value="debt-relief">Debt Relief</option>
+                    <option value="utility-assistance">Utility Assistance</option>
+                </select>
+            </div>
+
+            <!-- Filter Actions -->
+            <div class="filter-actions">
+                <button id="apply-filters" class="btn btn-primary">Apply Filters</button>
+                <button id="reset-filters" class="btn btn-secondary">Reset</button>
+            </div>
+        </div>
+
+        <!-- Summary Cards (Skeleton Loaders Initially) -->
+        <div class="summary-cards" id="summary-cards">
+            <div class="summary-card skeleton skeleton-card"></div>
+            <div class="summary-card skeleton skeleton-card"></div>
+            <div class="summary-card skeleton skeleton-card"></div>
+            <div class="summary-card skeleton skeleton-card"></div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="charts-grid" id="charts-grid">
+            <!-- Chart 1: Radar Chart with Skip Points -->
+            <div class="chart-card">
+                <div class="chart-header">
+                    <div class="chart-title">Program Performance Radar</div>
+                    <div class="chart-description">Multi-dimensional metrics across program categories with skip points</div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-wrapper">
+                        <canvas id="radar-chart"></canvas>
+                        <div id="radar-no-data" class="no-data" style="display: none;">
+                            <div class="no-data-icon">📊</div>
+                            <p>No radar data available</p>
+                            <p style="font-size: 13px; margin-top: 8px;">Try adjusting your filters</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart 2: Polar Area Chart with Centered Point Labels -->
+            <div class="chart-card">
+                <div class="chart-header">
+                    <div class="chart-title">Referral Status Distribution</div>
+                    <div class="chart-description">Polar area chart with centered point labels showing status proportions</div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-wrapper">
+                        <canvas id="polar-area-chart"></canvas>
+                        <div id="polar-no-data" class="no-data" style="display: none;">
+                            <div class="no-data-icon">📈</div>
+                            <p>No status data available</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart 3: Line Chart with Multiple Datasets -->
+            <div class="chart-card">
+                <div class="chart-header">
+                    <div class="chart-title">Referral Trends Over Time</div>
+                    <div class="chart-description">Line chart with multiple datasets showing total, completed, and pending referrals</div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-wrapper">
+                        <canvas id="line-datasets-chart"></canvas>
+                        <div id="line-datasets-no-data" class="no-data" style="display: none;">
+                            <div class="no-data-icon">📉</div>
+                            <p>No time series data available</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart 4: Stacked Line Chart -->
+            <div class="chart-card">
+                <div class="chart-header">
+                    <div class="chart-title">Referrals by Category Over Time</div>
+                    <div class="chart-description">Stacked line chart showing daily referral volume by program category</div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-wrapper">
+                        <canvas id="stacked-line-chart"></canvas>
+                        <div id="stacked-line-no-data" class="no-data" style="display: none;">
+                            <div class="no-data-icon">📈</div>
+                            <p>No stacked line data available</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="data-table-container" style="display:none">
+            <h3 style="margin-bottom: 20px; color: #2c3e50;">Top Items Table</h3>
+            <div id="table-container">
+                <table class="data-table" id="data-table">
+                    <thead>
+                        <tr>
+                            <th>Item Name</th>
+                            <th>Item ID</th>
+                            <th>Transactions</th>
+                            <th>Revenue</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        <!-- Data will be populated by JavaScript -->
+                    </tbody>
+                </table>
+                <div id="table-no-data" class="no-data" style="display: none; height: 200px;">
+                    <div class="no-data-icon">📋</div>
+                    <p>No table data available</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Debug Panel (Hidden by default, enable for development) -->
+        <button id="debug-toggle" class="debug-toggle">🔧</button>
+        <div id="debug-panel" class="debug-panel">
+            <div class="debug-section">
+                <div class="debug-section-title">Report Configuration</div>
+                <div class="debug-item"><span class="debug-label">Report ID:</span> <span id="debug-report-id">-</span></div>
+                <div class="debug-item"><span class="debug-label">Report Name:</span> <span id="debug-report-name">-</span></div>
+                <div class="debug-item"><span class="debug-label">Current Parameters:</span> <span id="debug-params">-</span></div>
+            </div>
+            <div class="debug-section">
+                <div class="debug-section-title">Thick Client Status</div>
+                <div class="debug-item"><span class="debug-label">Available:</span> <span id="debug-thick-client-available">-</span></div>
+                <div class="debug-item"><span class="debug-label">Ready:</span> <span id="debug-thick-client-ready">-</span></div>
+                <div class="debug-item"><span class="debug-label">Last Refresh:</span> <span id="debug-last-refresh">-</span></div>
+            </div>
+            <div class="debug-section">
+                <div class="debug-section-title">Datasources</div>
+                <div class="debug-item"><span class="debug-label">Loaded Count:</span> <span id="debug-datasource-count">-</span></div>
+                <div class="debug-item"><span class="debug-label">Available:</span> <span id="debug-datasource-list">-</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===========================================================================
+        // REPORT TEMPLATE - JavaScript Implementation
+        // ===========================================================================
+        // This template demonstrates proper thick client usage with best practices.
+        // Modify the visualization code for your specific report needs.
+        // ===========================================================================
+
+        'use strict';
+
+        // Global state management
+        const ReportState = {
+            // Configuration from server
+            config: null,
+
+            // Current filter values
+            filters: {
+                start_date: '',
+                end_date: '',
+                status_filter: '',
+                category_filter: ''
+            },
+
+            // Chart instances
+            charts: {
+                radar: null,
+                polarArea: null,
+                lineDatasets: null,
+                stackedLine: null
+            },
+
+            // Data cache
+            data: null,
+
+            // Debug mode
+            debugMode: false,
+
+            // Initialize state
+            init() {
+                console.log('📊 Report Template Initializing...');
+
+                // Parse configuration from server injection
+                this.parseConfig();
+
+                // Setup debug panel
+                this.setupDebugPanel();
+
+                // Update UI with config values
+                this.updateUIFromConfig();
+
+                // Log initialization
+                this.debugLog('State initialized', {
+                    reportId: this.config?.reportId,
+                    paramCount: Object.keys(this.filters).length
+                });
+            },
+
+            // Parse window.ReportConfig (injected by server)
+            parseConfig() {
+                if (!window.ReportConfig) {
+                    console.error('❌ window.ReportConfig not found. Ensure you are accessing via /api/embed');
+                    this.showFatalError('Report configuration not found. Access via reporting app URL.');
+                    return;
+                }
+
+                this.config = window.ReportConfig;
+
+                // Parse parameters (they are stored as JSON string)
+                if (this.config.params) {
+                    try {
+                        const parsedParams = JSON.parse(this.config.params);
+                        this.filters = { ...this.filters, ...parsedParams };
+                    } catch (e) {
+                        console.error('Failed to parse params JSON:', e);
+                    }
+                }
+
+                this.debugLog('Config parsed', {
+                    reportId: this.config.reportId,
+                    params: this.filters
+                });
+            },
+
+            // Update UI elements from configuration
+            updateUIFromConfig() {
+                // Update page title and header
+                if (this.config.reportName) {
+                    document.getElementById('report-title').textContent = this.config.reportName;
+                    document.title = this.config.reportName + ' - Dashboard';
+                }
+
+                if (this.config.reportId) {
+                    document.getElementById('report-id').textContent = this.config.reportId;
+                }
+
+                // Update filter inputs
+                if (this.filters.start_date) {
+                    document.getElementById('start-date').value = this.filters.start_date;
+                }
+
+                if (this.filters.end_date) {
+                    document.getElementById('end-date').value = this.filters.end_date;
+                }
+
+                if (this.filters.status_filter) {
+                    document.getElementById('status-filter').value = this.filters.status_filter;
+                }
+
+                if (this.filters.category_filter) {
+                    document.getElementById('category-filter').value = this.filters.category_filter;
+                }
+
+                // Update debug panel
+                this.updateDebugPanel();
+            },
+
+            // Update current filters from UI
+            updateFiltersFromUI() {
+                this.filters.start_date = document.getElementById('start-date').value;
+                this.filters.end_date = document.getElementById('end-date').value;
+                this.filters.status_filter = document.getElementById('status-filter').value;
+                this.filters.category_filter = document.getElementById('category-filter').value;
+
+                // Validate date range
+                if (this.filters.start_date && this.filters.end_date) {
+                    if (this.filters.start_date > this.filters.end_date) {
+                        throw new Error('Start date must be before end date.');
+                    }
+                }
+
+                this.debugLog('Filters updated', this.filters);
+            },
+
+            // Reset filters to original configuration
+            resetFilters() {
+                if (this.config && this.config.params) {
+                    try {
+                        const originalParams = JSON.parse(this.config.params);
+                        this.filters = { ...this.filters, ...originalParams };
+                        this.updateUIFromConfig();
+                    } catch (e) {
+                        console.error('Failed to reset filters:', e);
+                    }
+                }
+            },
+
+            // Debug logging
+            debugLog(message, data = null) {
+                if (this.debugMode) {
+                    console.log(`[DEBUG] ${message}`, data || '');
+                }
+            },
+
+            // Setup debug panel
+            setupDebugPanel() {
+                const toggleBtn = document.getElementById('debug-toggle');
+                const debugPanel = document.getElementById('debug-panel');
+
+                toggleBtn.addEventListener('click', () => {
+                    debugPanel.style.display = debugPanel.style.display === 'block' ? 'none' : 'block';
+                    this.debugMode = debugPanel.style.display === 'block';
+                    toggleBtn.textContent = this.debugMode ? '❌' : '🔧';
+                });
+
+                // Hide by default
+                debugPanel.style.display = 'none';
+            },
+
+            // Update debug panel with current state
+            updateDebugPanel() {
+                if (!this.debugMode) return;
+
+                document.getElementById('debug-report-id').textContent = this.config?.reportId || 'N/A';
+                document.getElementById('debug-report-name').textContent = this.config?.reportName || 'N/A';
+                document.getElementById('debug-params').textContent = JSON.stringify(this.filters, null, 2);
+
+                // Thick client status
+                const thickClientAvailable = !!(window.ReportApp && window.ReportApp.refresh);
+                document.getElementById('debug-thick-client-available').textContent = thickClientAvailable ? '✅ Yes' : '❌ No';
+                document.getElementById('debug-thick-client-ready').textContent = thickClientAvailable ? '✅ Yes' : '❌ No';
+
+                // Datasource info
+                if (this.data) {
+                    document.getElementById('debug-datasource-count').textContent = Object.keys(this.data).length;
+                    document.getElementById('debug-datasource-list').textContent = Object.keys(this.data).join(', ');
+                }
+            },
+
+            // Show fatal error (replaces entire page)
+            showFatalError(message) {
+                document.body.innerHTML = `
+                    <div style="padding: 40px; text-align: center; font-family: sans-serif;">
+                        <h1 style="color: #e74c3c; margin-bottom: 20px;">⚠️ Report Error</h1>
+                        <div style="background: #ffeaa7; border-left: 6px solid #e17055; padding: 20px; border-radius: 8px; max-width: 600px; margin: 0 auto; text-align: left;">
+                            <p style="font-size: 16px; margin-bottom: 10px;"><strong>${message}</strong></p>
+                            <p style="color: #666; font-size: 14px;">Please ensure you are accessing this report through the reporting application with a valid signed URL.</p>
+                        </div>
+                    </div>
+                `;
+            }
+        };
+
+        // ===========================================================================
+        // THICK CLIENT INTEGRATION
+        // ===========================================================================
+
+        const ThickClientManager = {
+            // Check if thick client is available
+            isAvailable() {
+                return !!(window.ReportApp && typeof window.ReportApp.refresh === 'function');
+            },
+
+            // Verify thick client is ready
+            async verifyReady() {
+                if (!this.isAvailable()) {
+                    throw new Error('Thick client not available. Ensure you are accessing via reporting app.');
+                }
+
+                // Wait for ready event if needed
+                return new Promise((resolve) => {
+                    if (window.ReportApp.getParam) {
+                        resolve();
+                    } else {
+                        window.ReportApp.on('ready', resolve);
+                    }
+                });
+            },
+
+            // Fetch data via thick client
+            async fetchData(params = {}) {
+                console.log('🔄 Fetching data via thick client with params:', params);
+
+                try {
+                    // Verify thick client is ready
+                    await this.verifyReady();
+
+                    // Update last refresh timestamp for debug
+                    document.getElementById('debug-last-refresh').textContent = new Date().toLocaleTimeString();
+
+                    // Call thick client refresh
+                    const data = await window.ReportApp.refresh(params);
+
+                    console.log('✅ Data fetched successfully, datasources:', Object.keys(data));
+                    ReportState.debugLog('Data fetched', { datasources: Object.keys(data) });
+
+                    return data;
+
+                } catch (error) {
+                    console.error('❌ Thick client fetch failed:', error);
+                    throw error;
+                }
+            },
+
+            // Get current parameter value
+            getParam(key) {
+                if (!this.isAvailable()) return null;
+                return window.ReportApp.getParam(key);
+            },
+
+            // Update a mutable parameter
+            setParam(key, value) {
+                if (!this.isAvailable()) return false;
+
+                try {
+                    window.ReportApp.setParam(key, value);
+                    return true;
+                } catch (error) {
+                    console.error(`Failed to set parameter ${key}:`, error);
+                    return false;
+                }
+            }
+        };
+
+        // ===========================================================================
+        // UI CONTROLS & EVENT HANDLING
+        // ===========================================================================
+
+        const UIController = {
+            // Initialize UI controls
+            init() {
+                this.setupEventListeners();
+                this.setupLoadingStates();
+                this.setupErrorHandling();
+            },
+
+            // Setup event listeners for filters and buttons
+            setupEventListeners() {
+                const applyBtn = document.getElementById('apply-filters');
+                const resetBtn = document.getElementById('reset-filters');
+                const startDateInput = document.getElementById('start-date');
+                const endDateInput = document.getElementById('end-date');
+
+                // Apply filters button
+                applyBtn.addEventListener('click', () => this.onApplyFilters());
+
+                // Reset filters button
+                resetBtn.addEventListener('click', () => this.onResetFilters());
+
+                // Date input changes with debounce
+                let debounceTimer;
+                const debounceTime = 300; // ms
+
+                const scheduleFilterUpdate = () => {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => this.onApplyFilters(), debounceTime);
+                };
+
+                startDateInput.addEventListener('change', scheduleFilterUpdate);
+                endDateInput.addEventListener('input', scheduleFilterUpdate);
+                endDateInput.addEventListener('change', scheduleFilterUpdate);
+                endDateInput.addEventListener('input', scheduleFilterUpdate);
+
+                // Enter key in inputs
+                [startDateInput, endDateInput].forEach(input => {
+                    input.addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter') this.onApplyFilters();
+                    });
+                });
+
+                console.log('✅ UI event listeners setup complete');
+            },
+
+            // Setup loading state management
+            setupLoadingStates() {
+                // Body class for overall loading
+                document.body.classList.add('loading');
+
+                // We'll remove the loading class when data is loaded
+            },
+
+            // Setup error handling
+            setupErrorHandling() {
+                window.addEventListener('error', (event) => {
+                    console.error('Global error:', event.error || event.message);
+                    this.showError(event.error?.message || event.message);
+                });
+
+                window.addEventListener('unhandledrejection', (event) => {
+                    console.error('Unhandled promise rejection:', event.reason);
+                    this.showError(event.reason?.message || 'Promise rejected');
+                });
+            },
+
+            // Apply filters handler
+            async onApplyFilters() {
+                try {
+                    // Update filters from UI
+                    ReportState.updateFiltersFromUI();
+
+                    // Fetch new data
+                    await DataManager.loadData(ReportState.filters);
+
+                } catch (error) {
+                    this.showError(error.message);
+                }
+            },
+
+            // Reset filters handler
+            onResetFilters() {
+                ReportState.resetFilters();
+                this.onApplyFilters(); // Reload with reset filters
+            },
+
+            // Show loading overlay
+            showLoading() {
+                document.getElementById('loading-overlay').classList.add('active');
+                document.body.classList.add('loading');
+                document.getElementById('apply-filters').disabled = true;
+            },
+
+            // Hide loading overlay
+            hideLoading() {
+                document.getElementById('loading-overlay').classList.remove('active');
+                document.body.classList.remove('loading');
+                document.getElementById('apply-filters').disabled = false;
+            },
+
+            // Show error message
+            showError(message, details = '') {
+                const errorEl = document.getElementById('error-message');
+                const detailsEl = document.getElementById('error-details');
+
+                detailsEl.textContent = details || message;
+                errorEl.classList.add('show');
+
+                // Auto-hide after 10 seconds
+                setTimeout(() => {
+                    errorEl.classList.remove('show');
+                }, 10000);
+            },
+
+            // Hide error message
+            hideError() {
+                document.getElementById('error-message').classList.remove('show');
+            },
+
+            // Update summary cards with data
+            updateSummaryCards(data) {
+                const summaryCards = document.getElementById('summary-cards');
+
+                // Remove skeleton loaders
+                summaryCards.innerHTML = '';
+
+                // Create cards from summary_stats datasource
+                if (data.summary_stats && data.summary_stats.rows.length > 0) {
+                    const row = data.summary_stats.rows[0];
+                    const columns = data.summary_stats.columns;
+
+                    // Helper to get value by column name
+                    const getValue = (colName) => {
+                        const index = columns.indexOf(colName);
+                        return index !== -1 ? row[index] : 'N/A';
+                    };
+
+                    const totalReferrals = getValue('total_referrals');
+                    const uniqueSeekers = getValue('unique_seekers');
+                    const uniqueCategories = getValue('unique_categories');
+                    const completionRate = getValue('overall_completion_rate');
+                    const firstDate = getValue('first_referral_date');
+                    const lastDate = getValue('last_referral_date');
+
+                    // Format values
+                    const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
+                    const formatPercent = (val) => val !== 'N/A' ? (Math.round(val * 1000) / 10 + '%') : 'N/A';
+
+                    // Create cards
+                    const cards = [
+                        { label: 'Total Referrals', value: totalReferrals, color: '#636efa' },
+                        { label: 'Unique Seekers', value: uniqueSeekers, color: '#00cec9' },
+                        { label: 'Completion Rate', value: formatPercent(completionRate), color: '#fd79a8' },
+                        { label: 'Date Range', value: `${formatDate(firstDate)} - ${formatDate(lastDate)}`, color: '#a29bfe' }
+                    ];
+
+                    // Render cards
+                    cards.forEach(card => {
+                        const cardEl = document.createElement('div');
+                        cardEl.className = 'summary-card';
+                        cardEl.innerHTML = `
+                            <div class="summary-value" style="color: ${card.color}">${card.value}</div>
+                            <div class="summary-label">${card.label}</div>
+                        `;
+                        summaryCards.appendChild(cardEl);
+                    });
+                } else {
+                    // No data, show placeholder cards
+                    const placeholderCards = [
+                        { label: 'Total Referrals', value: '0', color: '#636efa' },
+                        { label: 'Unique Seekers', value: '0', color: '#00cec9' },
+                        { label: 'Completion Rate', value: '0%', color: '#fd79a8' },
+                        { label: 'Date Range', value: 'N/A', color: '#a29bfe' }
+                    ];
+
+                    placeholderCards.forEach(card => {
+                        const cardEl = document.createElement('div');
+                        cardEl.className = 'summary-card';
+                        cardEl.innerHTML = `
+                            <div class="summary-value" style="color: ${card.color}">${card.value}</div>
+                            <div class="summary-label">${card.label}</div>
+                        `;
+                        summaryCards.appendChild(cardEl);
+                    });
+                }
+            }
+        };
+
+        // ===========================================================================
+        // DATA MANAGEMENT & PROCESSING
+        // ===========================================================================
+
+        const DataManager = {
+            // Load data with current filters
+            async loadData(params = {}) {
+                console.log('📥 Loading data with params:', params);
+
+                // Show loading state
+                UIController.showLoading();
+                UIController.hideError();
+
+                try {
+                    // Fetch data via thick client
+                    const data = await ThickClientManager.fetchData(params);
+
+                    // Update state
+                    ReportState.data = data;
+                    ReportState.updateDebugPanel();
+
+                    // Process and render data
+                    this.processData(data);
+
+                    // Update UI
+                    UIController.updateSummaryCards(data);
+
+                    console.log('✅ Data load complete');
+
+                } catch (error) {
+                    console.error('❌ Failed to load data:', error);
+                    UIController.showError(
+                        'Failed to load report data',
+                        `Error: ${error.message}\n\nPlease check your filters and try again.`
+                    );
+
+                    // Show empty states
+                    this.showEmptyStates();
+
+                } finally {
+                    // Hide loading state
+                    UIController.hideLoading();
+                }
+            },
+
+            // Process fetched data and update visualizations
+            processData(data) {
+                console.log('🔧 Processing data for visualization...');
+
+                // Update charts
+                this.updateRadarChart(data);
+                this.updatePolarAreaChart(data);
+                this.updateLineDatasetsChart(data);
+                this.updateStackedLineChart(data);
+
+                // Update data table (optional)
+                this.updateDataTable(data);
+
+                // Show/hide no-data states
+                this.updateNoDataStates(data);
+
+                ReportState.debugLog('Data processed', {
+                    chartCount: Object.keys(ReportState.charts).filter(k => ReportState.charts[k]).length,
+                    hasData: !!data
+                });
+            },
+
+            // Update time series chart
+            updateRadarChart(data) {
+                const canvas = document.getElementById('radar-chart');
+                const noDataEl = document.getElementById('radar-no-data');
+
+                if (!data.radar_metrics || data.radar_metrics.rows.length === 0) {
+                    if (ReportState.charts.radar) {
+                        ReportState.charts.radar.destroy();
+                        ReportState.charts.radar = null;
+                    }
+                    noDataEl.style.display = 'flex';
+                    canvas.style.display = 'none';
+                    return;
+                }
+
+                const { columns, rows } = data.radar_metrics;
+                const categoryIndex = columns.indexOf('category');
+                const totalReferralsIndex = columns.indexOf('total_referrals');
+                const uniqueSeekersIndex = columns.indexOf('unique_seekers');
+                const completionRateIndex = columns.indexOf('completion_rate');
+
+                // Extract data
+                const labels = rows.map(row => row[categoryIndex]);
+                const totalReferrals = rows.map(row => row[totalReferralsIndex]);
+                const uniqueSeekers = rows.map(row => row[uniqueSeekersIndex]);
+                const completionRates = rows.map(row => row[completionRateIndex] * 100); // convert to percentage
+
+                // Normalize data for radar scales (optional)
+                // We'll keep raw values; each dataset will have its own scale.
+
+                // Convert canvas display
+                noDataEl.style.display = 'none';
+                canvas.style.display = 'block';
+
+                // Create or update chart
+                const ctx = canvas.getContext('2d');
+
+                if (ReportState.charts.radar) {
+                    // Update existing chart
+                    ReportState.charts.radar.data.labels = labels;
+                    ReportState.charts.radar.data.datasets[0].data = totalReferrals;
+                    ReportState.charts.radar.data.datasets[1].data = uniqueSeekers;
+                    ReportState.charts.radar.data.datasets[2].data = completionRates;
+                    ReportState.charts.radar.update();
+                } else {
+                    // Create new radar chart with skip points (skip point labels for better readability)
+                    ReportState.charts.radar = new Chart(ctx, {
+                        type: 'radar',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: 'Total Referrals',
+                                    data: totalReferrals,
+                                    borderColor: '#636efa',
+                                    backgroundColor: 'rgba(99, 110, 250, 0.1)',
+                                    borderWidth: 2,
+                                    pointRadius: 4,
+                                    pointHoverRadius: 6
+                                },
+                                {
+                                    label: 'Unique Seekers',
+                                    data: uniqueSeekers,
+                                    borderColor: '#00cec9',
+                                    backgroundColor: 'rgba(0, 206, 201, 0.1)',
+                                    borderWidth: 2,
+                                    pointRadius: 4,
+                                    pointHoverRadius: 6
+                                },
+                                {
+                                    label: 'Completion Rate (%)',
+                                    data: completionRates,
+                                    borderColor: '#fd79a8',
+                                    backgroundColor: 'rgba(253, 121, 168, 0.1)',
+                                    borderWidth: 2,
+                                    pointRadius: 4,
+                                    pointHoverRadius: 6
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            elements: {
+                                line: {
+                                    tension: 0.3  // Smooth lines
+                                }
+                            },
+                            scales: {
+                                r: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        display: true,
+                                        stepSize: 10
+                                    },
+                                    pointLabels: {
+                                        display: true,
+                                        font: {
+                                            size: 12
+                                        }
+                                    }
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                }
+                            }
+                        }
+                    });
+                }
+            },
+
+            // Update polar area chart with centered point labels
+            updatePolarAreaChart(data) {
+                const canvas = document.getElementById('polar-area-chart');
+                const noDataEl = document.getElementById('polar-no-data');
+
+                if (!data.status_distribution || data.status_distribution.rows.length === 0) {
+                    if (ReportState.charts.polarArea) {
+                        ReportState.charts.polarArea.destroy();
+                        ReportState.charts.polarArea = null;
+                    }
+                    noDataEl.style.display = 'flex';
+                    canvas.style.display = 'none';
+                    return;
+                }
+
+                const { columns, rows } = data.status_distribution;
+                const statusIndex = columns.indexOf('status');
+                const countIndex = columns.indexOf('count');
+                const percentageIndex = columns.indexOf('percentage');
+
+                // Extract data
+                const labels = rows.map(row => row[statusIndex]);
+                const counts = rows.map(row => row[countIndex]);
+                const percentages = rows.map(row => row[percentageIndex]);
+
+                // Colors for polar area chart
+                const backgroundColors = [
+                    '#636efa', '#00cec9', '#fd79a8', '#a29bfe', '#74b9ff',
+                    '#55efc4', '#ffeaa7', '#fab1a0', '#e17055', '#d63031',
+                    '#0984e3', '#00b894', '#fdcb6e', '#e84393', '#6c5ce7'
+                ];
+
+                // Convert canvas display
+                noDataEl.style.display = 'none';
+                canvas.style.display = 'block';
+
+                // Create or update chart
+                const ctx = canvas.getContext('2d');
+
+                if (ReportState.charts.polarArea) {
+                    // Update existing chart
+                    ReportState.charts.polarArea.data.labels = labels;
+                    ReportState.charts.polarArea.data.datasets[0].data = counts;
+                    ReportState.charts.polarArea.update();
+                } else {
+                    // Create new polar area chart with centered point labels
+                    ReportState.charts.polarArea = new Chart(ctx, {
+                        type: 'polarArea',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                data: counts,
+                                backgroundColor: backgroundColors.slice(0, labels.length),
+                                borderWidth: 2,
+                                borderColor: 'white',
+                                hoverBackgroundColor: backgroundColors.map(c => c + 'CC')
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            layout: {
+                                padding: {
+                                    top: 20,
+                                    bottom: 20
+                                }
+                            },
+                            scales: {
+                                r: {
+                                    pointLabels: {
+                                        display: true,
+                                        centerPointLabels: true,  // This centers the point labels
+                                        font: {
+                                            size: 12,
+                                            weight: '600'
+                                        }
+                                    },
+                                    ticks: {
+                                        display: true,
+                                        backdropColor: 'transparent'
+                                    },
+                                    grid: {
+                                        circular: true
+                                    }
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    position: 'right',
+                                    labels: {
+                                        padding: 15,
+                                        usePointStyle: true
+                                    }
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            const label = context.label || '';
+                                            const value = context.raw || 0;
+                                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                            const percentage = Math.round((value / total) * 100);
+                                            return `${label}: ${value} referrals (${percentage}%)`;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            },
+
+            // Update line chart with multiple datasets
+            updateLineDatasetsChart(data) {
+                const canvas = document.getElementById('line-datasets-chart');
+                const noDataEl = document.getElementById('line-datasets-no-data');
+
+                if (!data.time_series_metrics || data.time_series_metrics.rows.length === 0) {
+                    if (ReportState.charts.lineDatasets) {
+                        ReportState.charts.lineDatasets.destroy();
+                        ReportState.charts.lineDatasets = null;
+                    }
+                    noDataEl.style.display = 'flex';
+                    canvas.style.display = 'none';
+                    return;
+                }
+
+                const { columns, rows } = data.time_series_metrics;
+                const dateIndex = columns.indexOf('date');
+                const totalIndex = columns.indexOf('total_referrals');
+                const completedIndex = columns.indexOf('completed_referrals');
+                const submittedIndex = columns.indexOf('submitted_referrals');
+                const inReviewIndex = columns.indexOf('in_review_referrals');
+                const uniqueSeekersIndex = columns.indexOf('unique_seekers');
+
+                // Extract data
+                const labels = rows.map(row => row[dateIndex]);
+                const totals = rows.map(row => row[totalIndex]);
+                const completed = rows.map(row => row[completedIndex]);
+                const submitted = rows.map(row => row[submittedIndex]);
+                const inReview = rows.map(row => row[inReviewIndex]);
+                const uniqueSeekers = rows.map(row => row[uniqueSeekersIndex]);
+
+                // Convert canvas display
+                noDataEl.style.display = 'none';
+                canvas.style.display = 'block';
+
+                // Create or update chart
+                const ctx = canvas.getContext('2d');
+
+                if (ReportState.charts.lineDatasets) {
+                    // Update existing chart
+                    ReportState.charts.lineDatasets.data.labels = labels;
+                    ReportState.charts.lineDatasets.data.datasets[0].data = totals;
+                    ReportState.charts.lineDatasets.data.datasets[1].data = completed;
+                    ReportState.charts.lineDatasets.data.datasets[2].data = submitted;
+                    ReportState.charts.lineDatasets.data.datasets[3].data = inReview;
+                    ReportState.charts.lineDatasets.data.datasets[4].data = uniqueSeekers;
+                    ReportState.charts.lineDatasets.update();
+                } else {
+                    // Create new line chart with multiple datasets
+                    ReportState.charts.lineDatasets = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: 'Total Referrals',
+                                    data: totals,
+                                    borderColor: '#636efa',
+                                    backgroundColor: 'rgba(99, 110, 250, 0.1)',
+                                    borderWidth: 2,
+                                    fill: true,
+                                    tension: 0.3
+                                },
+                                {
+                                    label: 'Completed',
+                                    data: completed,
+                                    borderColor: '#00cec9',
+                                    backgroundColor: 'rgba(0, 206, 201, 0.1)',
+                                    borderWidth: 2,
+                                    fill: true,
+                                    tension: 0.3
+                                },
+                                {
+                                    label: 'Submitted',
+                                    data: submitted,
+                                    borderColor: '#fd79a8',
+                                    backgroundColor: 'rgba(253, 121, 168, 0.1)',
+                                    borderWidth: 2,
+                                    fill: true,
+                                    tension: 0.3
+                                },
+                                {
+                                    label: 'In Review',
+                                    data: inReview,
+                                    borderColor: '#a29bfe',
+                                    backgroundColor: 'rgba(162, 155, 254, 0.1)',
+                                    borderWidth: 2,
+                                    fill: true,
+                                    tension: 0.3
+                                },
+                                {
+                                    label: 'Unique Seekers',
+                                    data: uniqueSeekers,
+                                    borderColor: '#74b9ff',
+                                    backgroundColor: 'rgba(116, 185, 255, 0.1)',
+                                    borderWidth: 2,
+                                    fill: true,
+                                    tension: 0.3,
+                                    yAxisID: 'y1'
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: {
+                                mode: 'index',
+                                intersect: false
+                            },
+                            scales: {
+                                x: {
+                                    grid: {
+                                        display: false
+                                    }
+                                },
+                                y: {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'left',
+                                    title: {
+                                        display: true,
+                                        text: 'Referral Count'
+                                    },
+                                    stacked: false
+                                },
+                                y1: {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'right',
+                                    title: {
+                                        display: true,
+                                        text: 'Unique Seekers'
+                                    },
+                                    grid: {
+                                        drawOnChartArea: false
+                                    },
+                                    stacked: false
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                }
+                            }
+                        }
+                    });
+                }
+            },
+
+            // Update stacked line chart by category
+            updateStackedLineChart(data) {
+                const canvas = document.getElementById('stacked-line-chart');
+                const noDataEl = document.getElementById('stacked-line-no-data');
+
+                if (!data.category_time_series || data.category_time_series.rows.length === 0) {
+                    if (ReportState.charts.stackedLine) {
+                        ReportState.charts.stackedLine.destroy();
+                        ReportState.charts.stackedLine = null;
+                    }
+                    noDataEl.style.display = 'flex';
+                    canvas.style.display = 'none';
+                    return;
+                }
+
+                const { columns, rows } = data.category_time_series;
+                const dateIndex = columns.indexOf('date');
+                const categoryIndex = columns.indexOf('category');
+                const countIndex = columns.indexOf('referral_count');
+
+                // Pivot data: group by category, collect series per date
+                const categories = [...new Set(rows.map(row => row[categoryIndex]))];
+                const dates = [...new Set(rows.map(row => row[dateIndex]))].sort();
+
+                // Limit to top 8 categories for readability
+                const topCategories = categories.slice(0, 8);
+
+                // Prepare dataset for each category
+                const datasets = topCategories.map((category, idx) => {
+                    // Filter rows for this category and map date to count
+                    const categoryRows = rows.filter(row => row[categoryIndex] === category);
+                    const countMap = new Map(categoryRows.map(row => [row[dateIndex], row[countIndex]]));
+                    const data = dates.map(date => countMap.get(date) || 0);
+
+                    // Color palette
+                    const colors = [
+                        '#636efa', '#00cec9', '#fd79a8', '#a29bfe', '#74b9ff',
+                        '#55efc4', '#ffeaa7', '#fab1a0', '#e17055', '#d63031'
+                    ];
+                    return {
+                        label: category,
+                        data: data,
+                        borderColor: colors[idx % colors.length],
+                        backgroundColor: colors[idx % colors.length] + '40', // transparency
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.2,
+                        stack: 'stack'
+                    };
+                });
+
+                // Convert canvas display
+                noDataEl.style.display = 'none';
+                canvas.style.display = 'block';
+
+                // Create or update chart
+                const ctx = canvas.getContext('2d');
+
+                if (ReportState.charts.stackedLine) {
+                    // Update existing chart
+                    ReportState.charts.stackedLine.data.labels = dates;
+                    ReportState.charts.stackedLine.data.datasets = datasets;
+                    ReportState.charts.stackedLine.update();
+                } else {
+                    // Create new stacked line chart
+                    ReportState.charts.stackedLine = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: dates,
+                            datasets: datasets
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: {
+                                mode: 'index',
+                                intersect: false
+                            },
+                            scales: {
+                                x: {
+                                    grid: {
+                                        display: false
+                                    }
+                                },
+                                y: {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'left',
+                                    title: {
+                                        display: true,
+                                        text: 'Referral Count'
+                                    },
+                                    stacked: true
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                }
+                            }
+                        }
+                    });
+                }
+            },
+
+            // Update data table
+            updateDataTable(data) {
+                // Table hidden by default (container display:none)
+                document.getElementById('data-table').style.display = 'none';
+                document.getElementById('table-no-data').style.display = 'none';
+            },
+
+            // Show empty states when no data
+            showEmptyStates() {
+                // Clear summary cards
+                const summaryCards = document.getElementById('summary-cards');
+                summaryCards.innerHTML = `
+                    <div class="summary-card">
+                        <div class="summary-value" style="color: #e74c3c">0</div>
+                        <div class="summary-label">Total Referrals</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-value" style="color: #e74c3c">0</div>
+                        <div class="summary-label">Unique Seekers</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-value" style="color: #e74c3c">0%</div>
+                        <div class="summary-label">Completion Rate</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-value" style="color: #e74c3c">Error</div>
+                        <div class="summary-label">Data Load Failed</div>
+                    </div>
+                `;
+
+                // Show no-data messages for our four charts
+                document.getElementById('radar-no-data').style.display = 'flex';
+                document.getElementById('polar-no-data').style.display = 'flex';
+                document.getElementById('line-datasets-no-data').style.display = 'flex';
+                document.getElementById('stacked-line-no-data').style.display = 'flex';
+                document.getElementById('radar-chart').style.display = 'none';
+                document.getElementById('polar-area-chart').style.display = 'none';
+                document.getElementById('line-datasets-chart').style.display = 'none';
+                document.getElementById('stacked-line-chart').style.display = 'none';
+
+                // Hide data table
+                document.getElementById('data-table').style.display = 'none';
+                document.getElementById('table-no-data').style.display = 'flex';
+
+                // Destroy all chart instances
+                if (ReportState.charts.radar) {
+                    ReportState.charts.radar.destroy();
+                    ReportState.charts.radar = null;
+                }
+                if (ReportState.charts.polarArea) {
+                    ReportState.charts.polarArea.destroy();
+                    ReportState.charts.polarArea = null;
+                }
+                if (ReportState.charts.lineDatasets) {
+                    ReportState.charts.lineDatasets.destroy();
+                    ReportState.charts.lineDatasets = null;
+                }
+                if (ReportState.charts.stackedLine) {
+                    ReportState.charts.stackedLine.destroy();
+                    ReportState.charts.stackedLine = null;
+                }
+            },
+
+            // Update no-data states based on available data
+            updateNoDataStates(data) {
+                // Radar chart
+                if (!data.radar_metrics || data.radar_metrics.rows.length === 0) {
+                    document.getElementById('radar-no-data').style.display = 'flex';
+                    document.getElementById('radar-chart').style.display = 'none';
+                } else {
+                    document.getElementById('radar-no-data').style.display = 'none';
+                    document.getElementById('radar-chart').style.display = 'block';
+                }
+
+                // Polar area chart
+                if (!data.status_distribution || data.status_distribution.rows.length === 0) {
+                    document.getElementById('polar-no-data').style.display = 'flex';
+                    document.getElementById('polar-area-chart').style.display = 'none';
+                } else {
+                    document.getElementById('polar-no-data').style.display = 'none';
+                    document.getElementById('polar-area-chart').style.display = 'block';
+                }
+
+                // Line datasets chart
+                if (!data.time_series_metrics || data.time_series_metrics.rows.length === 0) {
+                    document.getElementById('line-datasets-no-data').style.display = 'flex';
+                    document.getElementById('line-datasets-chart').style.display = 'none';
+                } else {
+                    document.getElementById('line-datasets-no-data').style.display = 'none';
+                    document.getElementById('line-datasets-chart').style.display = 'block';
+                }
+
+                // Stacked line chart
+                if (!data.category_time_series || data.category_time_series.rows.length === 0) {
+                    document.getElementById('stacked-line-no-data').style.display = 'flex';
+                    document.getElementById('stacked-line-chart').style.display = 'none';
+                } else {
+                    document.getElementById('stacked-line-no-data').style.display = 'none';
+                    document.getElementById('stacked-line-chart').style.display = 'block';
+                }
+
+                // Table (optional, keep hidden)
+                document.getElementById('data-table').style.display = 'none';
+                document.getElementById('table-no-data').style.display = 'flex';
+            }
+        };
+
+        // ===========================================================================
+        // INITIALIZATION
+        // ===========================================================================
+
+        // Main initialization function
+        async function initializeReport() {
+            console.log('🚀 Initializing Report Template...');
+
+            try {
+                // 1. Initialize report state
+                ReportState.init();
+
+                // 2. Verify thick client is available
+                if (!ThickClientManager.isAvailable()) {
+                    throw new Error('Thick client not available. Access via /api/embed URL.');
+                }
+
+                // 3. Initialize UI controls
+                UIController.init();
+
+                // 4. Load initial data
+                await DataManager.loadData(ReportState.filters);
+
+                console.log('✅ Report initialization complete');
+
+            } catch (error) {
+                console.error('❌ Report initialization failed:', error);
+                UIController.showError(
+                    'Failed to initialize report',
+                    `Error: ${error.message}\n\nPlease check the browser console for details.`
+                );
+
+                // Show fatal error if thick client not available
+                if (error.message.includes('Thick client not available')) {
+                    ReportState.showFatalError(error.message);
+                }
+            }
+        }
+
+        // Start initialization when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeReport);
+        } else {
+            initializeReport();
+        }
+
+        // ===========================================================================
+        // DEVELOPMENT UTILITIES
+        // ===========================================================================
+        // The following code is for development/debugging purposes only.
+        // Remove or comment out in production reports.
+
+        // Expose utilities to global scope for console debugging
+        window.ReportTemplate = {
+            state: ReportState,
+            dataManager: DataManager,
+            uiController: UIController,
+            thickClient: ThickClientManager,
+
+            // Utility to reload data with custom parameters
+            reloadData: async (params = {}) => {
+                console.log('🔄 Manual reload triggered via console');
+                await DataManager.loadData(params);
+            },
+
+            // Utility to show debug panel
+            showDebug: () => {
+                document.getElementById('debug-panel').style.display = 'block';
+                document.getElementById('debug-toggle').textContent = '❌';
+                ReportState.debugMode = true;
+                ReportState.updateDebugPanel();
+            },
+
+            // Utility to test error handling
+            testError: (message = 'Test error') => {
+                UIController.showError(message, 'This is a test error message for debugging.');
+            }
+        };
+
+        console.log('🔧 Report Template loaded. Access utilities via window.ReportTemplate');
+
+    </script>
+</body>
+</html>

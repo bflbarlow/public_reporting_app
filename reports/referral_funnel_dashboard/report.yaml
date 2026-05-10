@@ -39,7 +39,7 @@ datasources:
         GROUP BY rs.referral_id
       ) rs
         ON rs.referral_id = r.referral_id
-      WHERE r.created_at BETWEEN {{start_date}} AND {{end_date}}
+      WHERE r.referral_date BETWEEN {{start_date}} AND {{end_date}}
       GROUP BY p.program_numeric_id, p.program_name
       ORDER BY total_referrals DESC
     row_limit: 500
