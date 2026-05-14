@@ -19,13 +19,21 @@ mutable_params:
   - end_date
   - status
 
+# Parameters that support multiple values
+# For multi‑value parameters, SQL must use IN ({{param}}) syntax
+# Example: WHERE status IN ({{status}})
+# Default values can be specified: {{status:'active','pending'}}
+multi_value_params:
+  - organization_id  # immutable multi-value
+  - status           # mutable multi-value
+
 # Datasources (SQL queries)
 datasources:
   sales_summary:
     sql: |
       SELECT COUNT(*) as total_orders, SUM(amount) as total_revenue
       FROM orders
-      WHERE organization_id = {{organization_id}}
+      WHERE organization_id IN ({{organization_id}})
         AND order_date BETWEEN {{start_date}} AND {{end_date}}
     row_limit: 100
     cache_ttl: 300  # 5 minutes
@@ -34,7 +42,7 @@ datasources:
     sql: |
       SELECT DATE(order_date) as day, COUNT(*) as orders, SUM(amount) as revenue
       FROM orders
-      WHERE organization_id = {{organization_id}}
+      WHERE organization_id IN ({{organization_id}})
         AND order_date BETWEEN {{start_date}} AND {{end_date}}
       GROUP BY DATE(order_date)
       ORDER BY day
@@ -44,9 +52,9 @@ datasources:
     sql: |
       SELECT status, COUNT(*) as count
       FROM orders
-      WHERE organization_id = {{organization_id}}
+      WHERE organization_id IN ({{organization_id}})
         AND order_date BETWEEN {{start_date}} AND {{end_date}}
         -- Handle optional status filter (empty = NULL = all statuses)
-        AND ({{status}} IS NULL OR status = {{status}})
+        AND ({{status}} IS NULL OR status IN ({{status}}))
       GROUP BY status
     row_limit: 100

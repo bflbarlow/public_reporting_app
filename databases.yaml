@@ -1,7 +1,7 @@
 connections:
   default:
     driver: mysql
-    dsn: "root:password@tcp(localhost:3306)/testdb"
+    dsn: "root:@tcp(localhost:3306)/testdb"
     max_connections: 10
     read_only: true
     timeout: "30s"
@@ -9,7 +9,7 @@ connections:
   
   classicmodels:
     driver: mysql
-    dsn: "root:password@tcp(localhost:3306)/classicmodels"
+    dsn: "root:@tcp(localhost:3306)/classicmodels"
     max_connections: 10
     read_only: true
     timeout: "30s"

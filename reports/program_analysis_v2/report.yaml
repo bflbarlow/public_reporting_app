@@ -32,6 +32,9 @@ mutable_params:
   - status_filter                      # Optional: Filter by referral status
   - category_filter                    # Optional: Filter by program category
 
+multi_value_params:
+  - status_filter 
+
 # Datasources (SQL Queries)
 # -------------------------
 # Each datasource will be available in the thick client response
@@ -52,7 +55,7 @@ datasources:
         FROM referrals r
         LEFT JOIN programs p ON r.program_numeric_id = p.program_numeric_id
         WHERE r.referral_date BETWEEN {{start_date}} AND {{end_date}}
-          AND ({{status_filter}} IS NULL OR r.referral_status = {{status_filter}})
+          AND (coalesce({{status_filter}},'')='' OR r.referral_status IN ({{status_filter}}))
           AND ({{category_filter}} IS NULL OR p.categories LIKE CONCAT('%', {{category_filter}}, '%'))
         GROUP BY COALESCE(NULLIF(p.categories, ''), 'Uncategorized')
       )
@@ -95,7 +98,7 @@ datasources:
         COUNT(DISTINCT r.seeker_id) AS unique_seekers
       FROM referrals r
       WHERE r.referral_date BETWEEN {{start_date}} AND {{end_date}}
-        AND ({{status_filter}} IS NULL OR r.referral_status = {{status_filter}})
+        AND (coalesce({{status_filter}},'')='' OR r.referral_status IN ({{status_filter}}))
         AND ({{category_filter}} IS NULL OR EXISTS (
           SELECT 1 FROM programs p 
           WHERE p.program_numeric_id = r.program_numeric_id 
@@ -117,7 +120,7 @@ datasources:
       FROM referrals r
       LEFT JOIN programs p ON r.program_numeric_id = p.program_numeric_id
       WHERE r.referral_date BETWEEN {{start_date}} AND {{end_date}}
-        AND ({{status_filter}} IS NULL OR r.referral_status = {{status_filter}})
+        AND (coalesce({{status_filter}},'')='' OR r.referral_status IN ({{status_filter}}))
         AND ({{category_filter}} IS NULL OR p.categories LIKE CONCAT('%', {{category_filter}}, '%'))
       GROUP BY DATE(r.referral_date), COALESCE(NULLIF(p.categories, ''), 'Uncategorized')
       ORDER BY date, category
@@ -138,7 +141,7 @@ datasources:
       FROM referrals r
       LEFT JOIN programs p ON r.program_numeric_id = p.program_numeric_id
       WHERE r.referral_date BETWEEN {{start_date}} AND {{end_date}}
-        AND ({{status_filter}} IS NULL OR r.referral_status = {{status_filter}})
+        AND (coalesce({{status_filter}},'')='' OR r.referral_status IN ({{status_filter}}))
         AND ({{category_filter}} IS NULL OR p.categories LIKE CONCAT('%', {{category_filter}}, '%'))
     row_limit: 100
     cache_ttl: 300

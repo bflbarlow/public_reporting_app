@@ -40,7 +40,8 @@ These details are to *ALWAYS* be maintained with every code change.
 | **Parameterized Query** | A SQL query that contains placeholders like `{{start_date}}` which are safely replaced with values from the URL query string, preventing SQL injection. |
 | **Refresh Endpoint** | The `/refresh` API endpoint that accepts a signed URL and returns fresh data plus a new signed URL, enabling AJAX-based updates without page reloads. |
 | **Chart Data** | The JSON-encoded query results (columns and rows) for a chart, embedded inline in the page as `window.__chart_data__`. |
-| **Manifest** | A YAML file defining datasource-based reports. Contains datasource definitions, parameter schemas, and configuration for JavaScript-first development. Location: `reports/{report}.yaml`. |
+| **dashboard.html** | The report held in an html file defining the look (css), structure (html), and interactivity (JavaScript). Location: `reports/{report}/dashboard.html`. |
+| **report.yaml** | A YAML file defining datasource-based reports. Contains datasource definitions, parameter schemas, and configuration for JavaScript-first development. Location: `reports/{report}/report.yaml`. |
 | **Datasource** | A named SQL query in a manifest that provides data to JavaScript visualizations. Has parameter substitution, caching, and execution limits. |
 | **Client API** | The `window.__reportData` object injected into datasource-based reports, providing structured access to datasources via `getRows()` and `getColumns()` methods. These methods use the thick client (`window.ReportApp.refreshDatasource()`) as the sole data bridge to the reporting app. Direct API endpoints are disabled. |
 | **Parameter Classification** | The system of categorizing parameters as immutable (security boundaries, HMAC-signed) or mutable (user filters, not signed). Applies to both chart-based and datasource-based reports. |
@@ -77,7 +78,6 @@ reporting_app/
 ├── reports/                      # User report definitions
 │   ├── report_template/          # Template for new reports
 │   ├── example_dashboard/        # Simple example
-│   └── customer_*/               # Example customer reports
 ├── databases.yaml                # Database connections
 └── README.md
 ```
@@ -166,7 +166,7 @@ When the `ENABLE_PUBLIC_PATHS` environment variable is set to `true`, all securi
 
 ## Thick Client API
 
-**📖 Complete Guide:** See `THICK_CLIENT_FOR_REPORT_DEVS.md` for detailed usage instructions.
+**Complete Guide:** See `THICK_CLIENT_FOR_REPORT_DEVS.md` for detailed usage instructions.
 
 Reports interact with data through `window.ReportApp`:
 

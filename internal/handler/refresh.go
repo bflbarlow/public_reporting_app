@@ -38,7 +38,68 @@ func NewRefreshHandler(loader *loader.Loader, dbManager *database.Manager, nonce
 
 // RefreshRequest represents the JSON request body for refresh
 type RefreshRequest struct {
-	Params map[string]string `json:"params"`
+	Params map[string][]string `json:"params"`
+}
+
+// UnmarshalJSON custom unmarshaler to support both old (string) and new ([]string) formats
+func (r *RefreshRequest) UnmarshalJSON(data []byte) error {
+	// First, unmarshal into a raw map to handle any format
+	var rawMap map[string]json.RawMessage
+	if err := json.Unmarshal(data, &rawMap); err != nil {
+		return err
+	}
+	
+	// Check if params field exists
+	paramsRaw, ok := rawMap["params"]
+	if !ok {
+		// No params field is okay
+		r.Params = make(map[string][]string)
+		return nil
+	}
+	
+	// Try to unmarshal params as map[string][]string first (new format)
+	var paramsNew map[string][]string
+	if err := json.Unmarshal(paramsRaw, &paramsNew); err == nil {
+		r.Params = paramsNew
+		return nil
+	}
+	
+	// Try to unmarshal as map[string]string (old format)
+	var paramsOld map[string]string
+	if err := json.Unmarshal(paramsRaw, &paramsOld); err == nil {
+		r.Params = make(map[string][]string)
+		for k, v := range paramsOld {
+			r.Params[k] = []string{v}
+		}
+		return nil
+	}
+	
+	// Try to unmarshal as map[string]interface{} (mixed format)
+	var paramsMixed map[string]interface{}
+	if err := json.Unmarshal(paramsRaw, &paramsMixed); err == nil {
+		r.Params = make(map[string][]string)
+		for k, v := range paramsMixed {
+			switch val := v.(type) {
+			case string:
+				r.Params[k] = []string{val}
+			case []interface{}:
+				result := make([]string, len(val))
+				for i, item := range val {
+					result[i] = fmt.Sprintf("%v", item)
+				}
+				r.Params[k] = result
+			case nil:
+				r.Params[k] = []string{""}
+			default:
+				// Try to convert anything else to string
+				r.Params[k] = []string{fmt.Sprintf("%v", val)}
+			}
+		}
+		return nil
+	}
+	
+	// If we get here, params field exists but can't be parsed
+	return fmt.Errorf("invalid params format")
 }
 
 // RefreshResponse represents the JSON response for refresh
@@ -203,8 +264,8 @@ func (h *RefreshHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // mergeParams merges original and new parameters with validation
-func (h *RefreshHandler) mergeParams(report *core.Report, original, new map[string]string) map[string]string {
-	result := make(map[string]string)
+func (h *RefreshHandler) mergeParams(report *core.Report, original, new map[string][]string) map[string][]string {
+	result := make(map[string][]string)
 	
 	// Start with original parameters
 	for k, v := range original {
@@ -212,7 +273,7 @@ func (h *RefreshHandler) mergeParams(report *core.Report, original, new map[stri
 	}
 	
 	// Apply new parameters with validation
-	for k, newValue := range new {
+	for k, newValues := range new {
 		// Check if parameter is defined in report
 		if !report.ContainsParam(k) {
 			log.Printf("SECURITY: Unknown parameter %s in refresh request", k)
@@ -221,23 +282,39 @@ func (h *RefreshHandler) mergeParams(report *core.Report, original, new map[stri
 		
 		// Check immutable parameter boundaries
 		if report.IsImmutable(k) {
-			oldValue, hasOld := original[k]
-			if hasOld && oldValue != newValue {
-				log.Printf("SECURITY: Attempt to change immutable parameter %s from %s to %s", k, oldValue, newValue)
-				return nil
+			oldValues, hasOld := original[k]
+			if hasOld {
+				// For immutable parameters, compare slices
+				if !slicesEqual(oldValues, newValues) {
+					log.Printf("SECURITY: Attempt to change immutable parameter %s", k)
+					return nil
+				}
 			}
 			// If immutable param not previously set, we can add it
 		}
 		
 		// Update parameter
-		result[k] = newValue
+		result[k] = newValues
 	}
 	
 	return result
 }
 
+// slicesEqual compares two string slices for equality
+func slicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // executeDatasources executes all datasource queries
-func (h *RefreshHandler) executeDatasources(report *core.Report, params map[string]string) (map[string]interface{}, error) {
+func (h *RefreshHandler) executeDatasources(report *core.Report, params map[string][]string) (map[string]interface{}, error) {
 	// Get database connection
 	db, err := h.dbManager.GetClient(report.Database)
 	if err != nil {
@@ -270,7 +347,7 @@ func (h *RefreshHandler) executeDatasources(report *core.Report, params map[stri
 	// Execute each datasource
 	result := make(map[string]interface{})
 	for name, ds := range report.Datasources {
-		queryResult, err := h.dbManager.ExecuteDatasource(db, ds, params, rowLimit, timeout, report.ID, name, report.Database)
+		queryResult, err := h.dbManager.ExecuteDatasource(db, ds, params, report, rowLimit, timeout, report.ID, name, report.Database)
 		if err != nil {
 			return nil, fmt.Errorf("datasource %s: %w", name, err)
 		}
@@ -285,7 +362,7 @@ func (h *RefreshHandler) executeDatasources(report *core.Report, params map[stri
 }
 
 // generateNextURL generates a new signed URL for the next refresh
-func (h *RefreshHandler) generateNextURL(report *core.Report, params map[string]string) (string, error) {
+func (h *RefreshHandler) generateNextURL(report *core.Report, params map[string][]string) (string, error) {
 	// Generate new nonce (simple implementation)
 	nonce := fmt.Sprintf("%d", time.Now().UnixNano())
 	
@@ -303,23 +380,27 @@ func (h *RefreshHandler) generateNextURL(report *core.Report, params map[string]
 		report.ID, expires, nonce, sig)
 	
 	// Add all parameters (including empty values for optional mutable parameters)
-	for key, value := range params {
-		// Always include parameter, even if empty
-		urlStr += fmt.Sprintf("&%s=%s", url.QueryEscape(key), url.QueryEscape(value))
+	for key, values := range params {
+		for _, value := range values {
+			// Always include parameter, even if empty
+			urlStr += fmt.Sprintf("&%s=%s", url.QueryEscape(key), url.QueryEscape(value))
+		}
 	}
 	
 	return urlStr, nil
 }
 
 // generateNextURLPublic generates a URL without security for public paths
-func (h *RefreshHandler) generateNextURLPublic(report *core.Report, params map[string]string) (string, error) {
+func (h *RefreshHandler) generateNextURLPublic(report *core.Report, params map[string][]string) (string, error) {
 	// Build URL with just report_id and parameters
 	urlStr := fmt.Sprintf("/api/embed?report_id=%s", report.ID)
 	
 	// Add all parameters (including empty values for optional mutable parameters)
-	for key, value := range params {
-		// Always include parameter, even if empty
-		urlStr += fmt.Sprintf("&%s=%s", url.QueryEscape(key), url.QueryEscape(value))
+	for key, values := range params {
+		for _, value := range values {
+			// Always include parameter, even if empty
+			urlStr += fmt.Sprintf("&%s=%s", url.QueryEscape(key), url.QueryEscape(value))
+		}
 	}
 	
 	return urlStr, nil

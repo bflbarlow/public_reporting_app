@@ -1,0 +1,98 @@
+  return { params, config };
+}
+```
+
+### 4.5 Datasource-Based Reporting Model
+
+The reporting app also supports a **datasource-based reporting model** optimized for JavaScript‑first development. This model provides a structured client API (`window.__reportData`) alongside the thick client for maximum flexibility.
+
+#### Architecture Comparison
+
+| Aspect | Chart‑Based Model | Datasource‑Based Model |
+|--------|-------------------|------------------------|
+| **Data Access** | Thick client only (`window.ReportApp`) | Client API + thick client hybrid |
+| **SQL Definition** | In `report.yaml` per datasource | In `manifest.yaml` as datasources |
+| **Rendering** | Built‑in templates or simple Chart.js | Any JavaScript library (React, D3, Plotly, etc.) |
+| **Interactivity** | Via thick client API | Via client API or custom JavaScript |
+| **Coordination** | Limited cross‑filtering | Full custom coordination |
+| **Best For** | Simple dashboards, SQL‑centric teams | Complex visualizations, JavaScript‑heavy teams |
+
+#### Client API (`window.__reportData`)
+
+For datasource‑based reports, the server injects a structured API:
+
+```javascript
+window.__reportData = {
+  reportID: 'sales_dashboard',
+  datasources: {
+    monthly_sales: {
+      getRows: function(params) { /* fetch from server */ },
+      getColumns: function() { /* fetch metadata */ },
+      // Inline data available on page load
+      data: {
+        columns: ['month', 'revenue'],
+        rows: [['2024‑01', 10000], ...]
+      }
+    }
+  },
+  parameters: {
+    schema: { /* parameter definitions */ },
+    current: { /* current values */ },
+    immutable: ['customer_id'],
+    mutable: ['start_date', 'end_date']
+  }
+};
+```
+
+#### Using Datasource API with Thick Client
+
+You can use both APIs together for maximum flexibility:
+
+```javascript
+// Option 1: Use client API only
+const monthlySales = window.__reportData.datasources.monthly_sales;
+const data = await monthlySales.getRows({ start_date: '2024‑01‑01' });
+
+// Option 2: Use thick client for URL state, client API for data
+window.ReportApp.setParam('start_date', '2024‑01‑01');
+const data = await window.__reportData.datasources.monthly_sales
+  .getRows(window.ReportApp.getParams());
+
+// Option 3: Hybrid approach
+function refreshData(params) {
+  // Update thick client state
+  window.ReportApp.setParam('start_date', params.start_date);
+  
+  // Fetch via datasource API
+  return window.__reportData.datasources.monthly_sales.getRows(params);
+}
+```
+
+#### Parameter Classification Still Applies
+
+The same immutable/mutable parameter classification works for both models. Security boundaries are maintained regardless of which API you use.
+
+#### Choosing the Right Model
+
+**Use chart‑based model when:**
+- You need simple dashboards quickly
+- Your team is SQL‑centric with limited JavaScript expertise
+- Standard chart types (Chart.js) are sufficient
+- Legacy compatibility is required
+
+**Use datasource‑based model when:**
+- Complex interactive visualizations are needed (D3, Plotly, custom)
+- JavaScript/React expertise is available
+- Advanced coordination between visualizations
+- Hot reload during development is desired (manifests support file watching)
+
+#### Configuration
+
+To enable datasource‑based reports:
+1. Set `MANIFESTS_DIR=./manifests` environment variable
+2. Create `manifests/{report}.yaml` files
+3. Enable hot reload: `ENABLE_HOT_RELOAD=true` (optional)
+
+The system automatically routes requests to the appropriate handler based on whether a manifest exists for the report ID.
+
+## 5. Multi-Value Parameter Implementation Guide

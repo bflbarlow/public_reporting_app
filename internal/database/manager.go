@@ -145,6 +145,6 @@ func (m *Manager) ConnectionConfig(name string) (*ConnectionConfig, error) {
 }
 
 // ExecuteDatasourceManager is a convenience function that uses the manager's logger
-func (m *Manager) ExecuteDatasource(db *sql.DB, ds core.Datasource, params map[string]string, defaultRowLimit int, timeout time.Duration, reportID, datasource, dbName string) (*core.QueryResult, error) {
-	return ExecuteDatasourceWithLogger(db, ds, params, defaultRowLimit, timeout, reportID, datasource, dbName, m.logger)
+func (m *Manager) ExecuteDatasource(db *sql.DB, ds core.Datasource, params map[string][]string, report *core.Report, defaultRowLimit int, timeout time.Duration, reportID, datasource, dbName string) (*core.QueryResult, error) {
+	return ExecuteDatasourceWithLogger(db, ds, params, report, defaultRowLimit, timeout, reportID, datasource, dbName, m.logger)
 }
