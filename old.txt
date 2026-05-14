@@ -1,5 +1,0 @@
-  return { params, config };
-}
-```
-
-## 5. Multi-Value Parameter Implementation Guide
