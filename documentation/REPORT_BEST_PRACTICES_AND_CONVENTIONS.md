@@ -114,7 +114,6 @@ datasources:
       ORDER BY created_at DESC
       LIMIT 100  -- SQL-level limit
     row_limit: 100  # System-level limit (redundant safety)
-    cache_ttl: 300  # Cache for frequently accessed data
 ```
 
 **Efficient JOIN Patterns:**
@@ -143,20 +142,12 @@ WHERE o.organization_id = {{organization_id}}
 
 **Optional Filter Pattern (NULL Handling):**
 ```sql
--- Standard optional filter
-WHERE ({{status}} IS NULL OR status = {{status}})
-
--- Optional multi-value filter  
-WHERE ({{status_list}} IS NULL OR status IN ({{status_list}}))
-
--- Optional date range
+-- Optional date range with COALESCE fallback
 WHERE created_at >= COALESCE({{start_date}}, '2000-01-01')
   AND created_at <= COALESCE({{end_date}}, '2100-12-31')
 
--- Optional search across multiple columns
-WHERE ({{search}} IS NULL OR 
-      name LIKE CONCAT('%', {{search}}, '%') OR
-      email LIKE CONCAT('%', {{search}}, '%'))
+-- Optional value with default fallback
+WHERE role = COALESCE({{role}}, 'user')
 ```
 
 **Multi-Value Parameter Best Practices:**
@@ -173,15 +164,12 @@ WHERE status IN ({{status}})
   AND ({{region_codes}} IS NULL OR region_code IN ({{region_codes}}))
 ```
 
-**Parameter Mode Selection Guide:**
+**Default Value Syntax:**
 
 | Use Case | Syntax | Example | Why |
 |----------|--------|---------|-----|
-| **Comparison** | `{{param}}` | `WHERE status = {{status}}` | Auto-detects single/multi-value |
-| **Value Context** | `{{param:value}}` | `BETWEEN {{start_date:value}} AND {{end_date:value}}` | No operator generation |
-| **Explicit IN** | `{{param:in}}` | `WHERE id IN ({{ids:in}})` | Forces IN clause expansion |
-| **Default Value** | `{{param:'default'}}` | `WHERE role = {{role:'user'}}` | Fallback when empty |
-| **Multi Default** | `{{param:'a','b'}}` | `WHERE role IN ({{role:'admin','user'}})` | Array fallback |
+| **Default Value** | `{{param:'default'}}` | `WHERE role = {{role:'user'}}` | Fallback when parameter is empty or absent |
+| **Multi Default** | `{{param:'a','b'}}` | `WHERE role IN ({{role:'admin','user'}})` | Array fallback for multi-value params |
 
 ### 2.3 Complex Query Patterns
 
@@ -384,50 +372,40 @@ async function refreshWithValidation(newParams = {}) {
 
 **Multi-Value Parameter Handling:**
 ```javascript
-// Set multiple values
-window.ReportApp.setParamValues('status', ['active', 'pending']);
+// Set a parameter (multi-value params use comma-separated strings internally)
+window.ReportApp.setParam('status', 'active');
 
-// Add a single value
-window.ReportApp.addParamValue('status', 'cancelled');
+// Get all current parameters
+const params = window.ReportApp.getParams();
 
-// Remove a specific value
-window.ReportApp.removeParamValue('status', 'pending');
-
-// Get all values
-const allStatuses = window.ReportApp.getParamValues('status');
-
-// Check if parameter supports multi-values
-if (window.ReportApp.isMultiValue('status')) {
-  // Show multi-select UI
-  initMultiSelect('status', allStatuses);
+// Check parameter type
+if (window.ReportApp.isImmutable('organization_id')) {
+  // Show read-only indicator
+}
+if (window.ReportApp.isMutable('status')) {
+  // Show filter control
 }
 ```
 
 ### 3.3 Event-Driven Architecture
 
-**Listen to Thick Client Events:**
+**Thick Client Event System:**
+
+The thick client provides a basic `on()`/`emit()` event system. It emits a `'ready'` event when initialization is complete:
+
 ```javascript
-// Show loading state
-window.addEventListener('report:refresh-start', () => {
-  document.body.classList.add('loading');
-  showLoadingOverlay();
+// Wait for thick client to be ready
+window.ReportApp.on('ready', (data) => {
+  console.log('Report ready:', data.reportId);
+  initializeDashboard();
 });
 
-// Handle refresh completion
-window.addEventListener('report:refresh-complete', (event) => {
-  const { data } = event.detail;
-  updateVisualizations(data);
-  document.body.classList.remove('loading');
-  hideLoadingOverlay();
-});
-
-// Handle errors
-window.addEventListener('report:refresh-error', (event) => {
-  const { error } = event.detail;
-  showError(`Refresh failed: ${error.message}`);
-  document.body.classList.remove('loading');
-  hideLoadingOverlay();
-});
+// Custom events for report author use
+customEvent: function(event, data) {
+  if (window.ReportApp.emit) {
+    window.ReportApp.emit(event, data);
+  }
+}
 ```
 
 ### 3.4 Loading State Patterns
@@ -608,7 +586,8 @@ function initMultiSelect(parameterName, currentValues = []) {
     select.addEventListener('change', () => {
       const selected = Array.from(select.selectedOptions)
                           .map(opt => opt.value);
-      window.ReportApp.setParamValues(parameterName, selected);
+      // Multi-value params use comma-separated strings
+      window.ReportApp.setParam(parameterName, selected.join(','));
       debouncedRefresh();
     });
     
@@ -723,7 +702,7 @@ function showError(message, details = '') {
 
 ### 5.1 Server-Side Optimization
 
-**Caching Strategy:**
+**Row Limits:**
 ```yaml
 datasources:
   summary_stats:
@@ -733,16 +712,12 @@ datasources:
       WHERE organization_id = {{organization_id}}
         AND created_at BETWEEN {{start_date}} AND {{end_date}}
     row_limit: 100
-    cache_ttl: 300  # Cache for 5 minutes
-    description: "Summary statistics"
 
   reference_data:
     sql: |
       SELECT id, name FROM categories
       WHERE organization_id = {{organization_id}}
     row_limit: 1000
-    cache_ttl: 3600  # Cache for 1 hour (slow-changing)
-    description: "Reference data for dropdowns"
 
   real_time_data:
     sql: |
@@ -750,8 +725,6 @@ datasources:
       WHERE organization_id = {{organization_id}}
         AND created_at > NOW() - INTERVAL 1 HOUR
     row_limit: 1000
-    cache_ttl: 0  # No cache (real-time)
-    description: "Real-time activity data"
 ```
 
 **Batch Operations:**
@@ -897,21 +870,17 @@ datasources:
     # Consider pagination for >1000 rows
 ```
 
-**Progressive Loading:**
+**Sequential Loading:**
 ```javascript
-// Load critical data first, then secondary
-async function loadDataProgressive() {
-  // Load summary and main chart data
-  const primaryData = await window.ReportApp.refresh({
-    include: ['summary', 'main_chart']
-  });
+// Load data sequentially with setTimeout for UX
+async function loadDataSequential() {
+  // Load primary data first
+  const primaryData = await window.ReportApp.refresh({});
   updatePrimaryVisualizations(primaryData);
   
-  // Load secondary data
+  // Load secondary data after a short delay
   setTimeout(async () => {
-    const secondaryData = await window.ReportApp.refresh({
-      include: ['details', 'secondary_charts']
-    });
+    const secondaryData = await window.ReportApp.refresh({});
     updateSecondaryVisualizations(secondaryData);
   }, 100);
 }
@@ -941,7 +910,7 @@ vim dashboard.html  # Update visualizations
   - Update `name` and `description`
   - Modify `immutable_params` and `mutable_params`
   - Replace SQL queries with your actual queries
-  - Adjust `row_limit` and `cache_ttl` values
+  - Adjust `row_limit` values
 
 - [ ] **Update `dashboard.html`**:
   - Change page title and headers
@@ -964,9 +933,9 @@ vim dashboard.html  # Update visualizations
  go run main.go -genurl -report my_report \
   -params "organization_id=123,start_date=2024-01-01,end_date=2024-12-31"
 
-# Multi-value parameters
+# Multi-value parameters (use | to separate key=value pairs)
  go run main.go -genurl -report my_report \
-  -params "organization_id=123&status=active,pending&category=1,2,3"
+  -params "organization_id=123|status=active,pending|category=1,2,3"
 
 # Empty optional parameters
  go run main.go -genurl -report my_report \
@@ -1015,9 +984,9 @@ if (window.enableDebug) {
     return result;
   };
   
-  // Monitor parameter changes
-  window.addEventListener('report:param-changed', (event) => {
-    console.log('Parameter changed:', event.detail);
+  // Monitor custom events (if report emits them)
+  window.ReportApp.on('custom-event', (data) => {
+    console.log('Custom event:', data);
   });
 }
 ```
@@ -1116,7 +1085,7 @@ docs(report): Add README for referral_funnel_dashboard
    - Use CTEs for complex queries
    - Implement proper NULL handling for optional filters
    - Use window functions for analytical queries
-   - Choose appropriate parameter modes (`:value`, `:in`, etc.)
+   - Use default value syntax (`{{param:'default'}}`) for fallback values
 
 2. **UI/UX Quality**:
    - Follow the `STYLES.md` color palette
@@ -1147,7 +1116,7 @@ docs(report): Add README for referral_funnel_dashboard
 **Data Exploration Reports:**
 - Many optional filters
 - Multi-select parameters
-- Real-time updates (low cache_ttl)
+- Real-time updates (frequent filter changes)
 - Export functionality
 
 ### 7.4 Anti-Patterns to Avoid
@@ -1177,14 +1146,14 @@ docs(report): Add README for referral_funnel_dashboard
 2. [ ] Update `report.yaml` (id, name, description)
 3. [ ] Define immutable and mutable parameters
 4. [ ] Write secure SQL queries with organization_id filters
-5. [ ] Set appropriate row_limit and cache_ttl values
+5. [ ] Set appropriate row_limit values
 6. [ ] Customize `dashboard.html` with your visualizations
 7. [ ] Test with generated URLs
 8. [ ] Verify security, performance, and UX
 
 **Report Maintenance:**
 1. [ ] Regularly review query performance
-2. [ ] Update cache_ttl values based on data change frequency
+2. [ ] Review query performance and row limits periodically
 3. [ ] Test with new edge cases
 4. [ ] Monitor user feedback and error rates
 5. [ ] Keep dependencies (Chart.js, etc.) updated
