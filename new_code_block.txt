@@ -1,0 +1,108 @@
+**New:**
+```go
+func InjectParams(sql string, params map[string][]string, report *core.Report) (string, []interface{}) {
+    // Regex captures parameter name and optional default clause.
+    // Default clause can be a single quoted string, a numeric literal, or comma‑separated values.
+    re := regexp.MustCompile(`\{\{(\w+)(?::([^}]+))?\}\}`)
+    
+    var result strings.Builder
+    result.Grow(len(sql))
+    var args []interface{}
+    
+    lastIndex := 0
+    for _, match := range re.FindAllStringSubmatchIndex(sql, -1) {
+        result.WriteString(sql[lastIndex:match[0]])
+        
+        paramName := sql[match[2]:match[3]]
+        defaultClause := ""
+        if match[4] != -1 {
+            defaultClause = sql[match[4]:match[5]]
+        }
+        
+        // Determine values to use
+        var values []string
+        if vals, ok := params[paramName]; ok && vals != nil {
+            // Parameter present in URL
+            values = vals
+        } else if defaultClause != "" {
+            // Parameter absent, use default
+            values = parseDefaultClause(defaultClause)
+        }
+        // If values is nil → will expand to NULL
+        
+        // Determine if parameter supports multiple values
+        isMulti := report.IsMultiValue(paramName)
+        
+        // Expand placeholder
+        if len(values) == 0 {
+            // Missing or empty → NULL
+            result.WriteString("NULL")
+            // No arg added
+        } else if len(values) == 1 {
+            // Single value
+            result.WriteString("?")
+            if values[0] == "" {
+                args = append(args, nil)
+            } else {
+                args = append(args, values[0])
+            }
+        } else {
+            // Multiple values
+            if !isMulti {
+                // Parameter not declared multi‑value: take first value only
+                // (Could also raise an error at validation time)
+                result.WriteString("?")
+                if values[0] == "" {
+                    args = append(args, nil)
+                } else {
+                    args = append(args, values[0])
+                }
+            } else {
+                // Multi‑value: expand to comma‑separated placeholders
+                placeholders := make([]string, len(values))
+                for i, v := range values {
+                    placeholders[i] = "?"
+                    if v == "" {
+                        args = append(args, nil)
+                    } else {
+                        args = append(args, v)
+                    }
+                }
+                result.WriteString(strings.Join(placeholders, ","))
+            }
+        }
+        
+        lastIndex = match[1]
+    }
+    
+    result.WriteString(sql[lastIndex:])
+    return result.String(), args
+}
+
+// parseDefaultClause parses a default clause like "'default'", "-10", "1,2,3", or "'a','b','c'".
+// It returns a slice of strings (already stripped of quotes).
+func parseDefaultClause(clause string) []string {
+    clause = strings.TrimSpace(clause)
+    if clause == "" {
+        return nil
+    }
+    
+    // If the clause contains commas, split by commas, respecting quoted strings
+    // Simple implementation: split on commas, trim spaces, strip surrounding single quotes
+    var values []string
+    // This simple parser assumes no embedded commas or quotes inside values.
+    // For production, use a proper CSV parser or a more robust tokenizer.
+    parts := strings.Split(clause, ",")
+    for _, part := range parts {
+        part = strings.TrimSpace(part)
+        // Remove surrounding single quotes if present
+        if len(part) >= 2 && part[0] == '\'' && part[len(part)-1] == '\'' {
+            part = part[1 : len(part)-1]
+            // Unescape doubled single quotes
+            part = strings.ReplaceAll(part, "''", "'")
+        }
+        values = append(values, part)
+    }
+    return values
+}
+```

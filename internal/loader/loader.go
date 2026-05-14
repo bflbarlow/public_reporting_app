@@ -114,6 +114,7 @@ func parseReportYAML(path string) (*core.Report, error) {
 		MaxRows         int                    `yaml:"max_rows"`
 		ImmutableParams interface{}            `yaml:"immutable_params"`
 		MutableParams   interface{}            `yaml:"mutable_params"`
+		MultiValueParams interface{}           `yaml:"multi_value_params"`
 		Datasources     map[string]interface{} `yaml:"datasources"`
 	}
 	
@@ -155,6 +156,7 @@ func parseReportYAML(path string) (*core.Report, error) {
 	
 	immutableParams := convertParams(raw.ImmutableParams)
 	mutableParams := convertParams(raw.MutableParams)
+	multiValueParams := convertParams(raw.MultiValueParams)
 	
 	// Parse datasources
 	datasources := make(map[string]core.Datasource)
@@ -177,6 +179,7 @@ func parseReportYAML(path string) (*core.Report, error) {
 		MaxRows:         raw.MaxRows,
 		ImmutableParams: immutableParams,
 		MutableParams:   mutableParams,
+		MultiValueParams: multiValueParams,
 		Datasources:     datasources,
 	}
 	

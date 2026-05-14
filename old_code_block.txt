@@ -1,0 +1,112 @@
+**New:**
+```go
+func InjectParams(sql string, params map[string][]string, report *core.Report) (string, []interface{}) {
+    re := regexp.MustCompile(`\{\{(\w+)(?::(\w+))?\}\}`)
+    
+    var result strings.Builder
+    result.Grow(len(sql))
+    var args []interface{}
+    
+    lastIndex := 0
+    for _, match := range re.FindAllStringSubmatchIndex(sql, -1) {
+        result.WriteString(sql[lastIndex:match[0]])
+        
+        // Extract parameter name and optional mode
+        paramName := sql[match[2]:match[3]]
+        mode := ""
+        if match[4] != -1 {
+            mode = sql[match[4]:match[5]]
+        }
+        
+        // Determine values
+        var values []string
+        if vals, ok := params[paramName]; ok && vals != nil {
+            values = vals
+        }
+        
+        // Determine expansion based on mode and value count
+        switch mode {
+        case "in":
+            // Always expand as IN clause
+            placeholders := make([]string, len(values))
+            for i := range values {
+                placeholders[i] = "?"
+                if len(values) == 0 {
+                    args = append(args, nil)
+                } else if values[i] == "" {
+                    args = append(args, nil)
+                } else {
+                    args = append(args, values[i])
+                }
+            }
+            if len(values) == 0 {
+                result.WriteString("1=1")
+            } else {
+                result.WriteString("IN (" + strings.Join(placeholders, ",") + ")")
+            }
+        case "eq":
+            // Always expand as single = ?
+            if len(values) == 0 || values[0] == "" {
+                result.WriteString("= ?")
+                args = append(args, nil)
+            } else {
+                result.WriteString("= ?")
+                args = append(args, values[0])
+            }
+        case "":
+            // Auto mode: expand based on value count
+            if len(values) == 0 {
+                result.WriteString("1=1")
+            } else if len(values) == 1 {
+                result.WriteString("= ?")
+                if values[0] == "" {
+                    args = append(args, nil)
+                } else {
+                    args = append(args, values[0])
+                }
+            } else {
+                placeholders := make([]string, len(values))
+                for i := range values {
+                    placeholders[i] = "?"
+                    if values[i] == "" {
+                        args = append(args, nil)
+                    } else {
+                        args = append(args, values[i])
+                    }
+                }
+                result.WriteString("IN (" + strings.Join(placeholders, ",") + ")")
+            }
+        default:
+            // Unknown mode — treat as auto
+            // (handled by falling through to auto)
+            if len(values) == 0 {
+                result.WriteString("1=1")
+            } else if len(values) == 1 {
+                result.WriteString("= ?")
+                if values[0] == "" {
+                    args = append(args, nil)
+                } else {
+                    args = append(args, values[0])
+                }
+            } else {
+                placeholders := make([]string, len(values))
+                for i := range values {
+                    placeholders[i] = "?"
+                    if values[i] == "" {
+                        args = append(args, nil)
+                    } else {
+                        args = append(args, values[i])
+                    }
+                }
+                result.WriteString("IN (" + strings.Join(placeholders, ",") + ")")
+            }
+        }
+        
+        lastIndex = match[1]
+    }
+    
+    result.WriteString(sql[lastIndex:])
+    return result.String(), args
+}
+```
+

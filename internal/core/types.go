@@ -15,6 +15,7 @@ type Report struct {
 	// Parameter classification
 	ImmutableParams []string // Included in HMAC signature
 	MutableParams   []string // Excluded from HMAC, can be changed
+	MultiValueParams []string // Parameters that support multiple values
 	
 	// Data sources (unified concept - charts or datasources)
 	Datasources map[string]Datasource
@@ -35,13 +36,13 @@ type QueryResult struct {
 
 // ParamSet represents parameters for a report request
 type ParamSet struct {
-	Immutable map[string]string
-	Mutable   map[string]string
+	Immutable map[string][]string
+	Mutable   map[string][]string
 }
 
 // ExtractImmutable extracts immutable parameters from a full map
-func (r *Report) ExtractImmutable(params map[string]string) map[string]string {
-	result := make(map[string]string)
+func (r *Report) ExtractImmutable(params map[string][]string) map[string][]string {
+	result := make(map[string][]string)
 	for _, name := range r.ImmutableParams {
 		if value, ok := params[name]; ok {
 			result[name] = value
@@ -51,7 +52,7 @@ func (r *Report) ExtractImmutable(params map[string]string) map[string]string {
 }
 
 // ValidateParams validates parameters against report definition
-func (r *Report) ValidateParams(params map[string]string) error {
+func (r *Report) ValidateParams(params map[string][]string) error {
 	// Check required immutable params
 	for _, name := range r.ImmutableParams {
 		if _, ok := params[name]; !ok {
@@ -89,6 +90,16 @@ func (r *Report) ContainsParam(name string) bool {
 // IsImmutable checks if a parameter is immutable
 func (r *Report) IsImmutable(name string) bool {
 	for _, n := range r.ImmutableParams {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
+// IsMultiValue checks if a parameter supports multiple values
+func (r *Report) IsMultiValue(name string) bool {
+	for _, n := range r.MultiValueParams {
 		if n == name {
 			return true
 		}

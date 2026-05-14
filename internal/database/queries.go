@@ -87,12 +87,12 @@ func ExecuteQueryWithLogger(db *sql.DB, sql string, args []interface{}, rowLimit
 }
 
 // ExecuteDatasource executes a datasource query for a report
-func ExecuteDatasource(db *sql.DB, ds core.Datasource, params map[string]string, defaultRowLimit int, timeout time.Duration) (*core.QueryResult, error) {
-	return ExecuteDatasourceWithLogger(db, ds, params, defaultRowLimit, timeout, "", "", "", nil)
+func ExecuteDatasource(db *sql.DB, ds core.Datasource, params map[string][]string, report *core.Report, defaultRowLimit int, timeout time.Duration) (*core.QueryResult, error) {
+	return ExecuteDatasourceWithLogger(db, ds, params, report, defaultRowLimit, timeout, "", "", "", nil)
 }
 
 // ExecuteDatasourceWithLogger executes a datasource query for a report with logging
-func ExecuteDatasourceWithLogger(db *sql.DB, ds core.Datasource, params map[string]string, defaultRowLimit int, timeout time.Duration, reportID, datasource, dbName string, logger *logging.QueryLogger) (*core.QueryResult, error) {
+func ExecuteDatasourceWithLogger(db *sql.DB, ds core.Datasource, params map[string][]string, report *core.Report, defaultRowLimit int, timeout time.Duration, reportID, datasource, dbName string, logger *logging.QueryLogger) (*core.QueryResult, error) {
 	// Determine row limit
 	rowLimit := defaultRowLimit
 	if ds.RowLimit > 0 && ds.RowLimit < rowLimit {
@@ -100,13 +100,13 @@ func ExecuteDatasourceWithLogger(db *sql.DB, ds core.Datasource, params map[stri
 	}
 	
 	// Inject parameters into SQL
-	sql, args := InjectParams(ds.SQL, params)
+	sql, args := InjectParams(ds.SQL, params, report)
 	
 	return ExecuteQueryWithLogger(db, sql, args, rowLimit, timeout, reportID, datasource, dbName, logger)
 }
 
 // InjectParams is a wrapper around loader.InjectParams
 // Placed here for database package convenience
-func InjectParams(sql string, params map[string]string) (string, []interface{}) {
-	return loader.InjectParams(sql, params)
+func InjectParams(sql string, params map[string][]string, report *core.Report) (string, []interface{}) {
+	return loader.InjectParams(sql, params, report)
 }

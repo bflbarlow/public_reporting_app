@@ -13,7 +13,7 @@ import (
 )
 
 // SignURL signs a URL with HMAC using only immutable parameters
-func SignURL(reportID string, expires int64, nonce string, immutableParams map[string]string, secret []byte) string {
+func SignURL(reportID string, expires int64, nonce string, immutableParams map[string][]string, secret []byte) string {
 	// Build message: report_id:expires:nonce:canonical_immutable_params
 	// where canonical_immutable_params is key=urlencode(value)&key2=urlencode(value2)
 	// with keys sorted alphabetically
@@ -28,8 +28,8 @@ func SignURL(reportID string, expires int64, nonce string, immutableParams map[s
 }
 
 // canonicalParams creates a canonical string representation of parameters
-// Keys are sorted alphabetically, values are URL-encoded
-func canonicalParams(params map[string]string) string {
+// Keys are sorted alphabetically, values are URL-encoded and pipe-separated
+func canonicalParams(params map[string][]string) string {
 	if len(params) == 0 {
 		return ""
 	}
@@ -49,13 +49,22 @@ func canonicalParams(params map[string]string) string {
 		}
 		buf.WriteString(k)
 		buf.WriteString("=")
-		buf.WriteString(url.QueryEscape(params[k]))
+		// Sort values within each key for determinism
+		values := make([]string, len(params[k]))
+		copy(values, params[k])
+		sort.Strings(values)
+		for j, v := range values {
+			if j > 0 {
+				buf.WriteString("|")
+			}
+			buf.WriteString(url.QueryEscape(v))
+		}
 	}
 	return buf.String()
 }
 
 // VerifyURL verifies a URL signature
-func VerifyURL(reportID string, expires int64, nonce string, immutableParams map[string]string, sig string, secret []byte) bool {
+func VerifyURL(reportID string, expires int64, nonce string, immutableParams map[string][]string, sig string, secret []byte) bool {
 	expected := SignURL(reportID, expires, nonce, immutableParams, secret)
 	return hmac.Equal([]byte(expected), []byte(sig))
 }
@@ -68,9 +77,9 @@ func signMessage(message string, secret []byte) string {
 }
 
 // ExtractParams extracts all parameters (except HMAC params) from query string
-// Includes parameters even with empty values to support optional mutable parameters
-func ExtractParams(query url.Values) map[string]string {
-	params := make(map[string]string)
+// Returns all values for each parameter to support multi-value parameters
+func ExtractParams(query url.Values) map[string][]string {
+	params := make(map[string][]string)
 	
 	for key, values := range query {
 		// Skip HMAC-related parameters
@@ -80,11 +89,11 @@ func ExtractParams(query url.Values) map[string]string {
 		}
 		
 		if len(values) > 0 {
-			// Include parameter even if value is empty string
-			params[key] = values[0]
+			// Include all values for multi-value support
+			params[key] = values
 		} else {
-			// Parameter without value (key with no =) becomes empty string
-			params[key] = ""
+			// Parameter without value (key with no =) becomes slice with empty string
+			params[key] = []string{""}
 		}
 	}
 	

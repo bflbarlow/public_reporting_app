@@ -163,7 +163,7 @@ func (h *EmbedHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // renderReport renders the HTML for a report
-func (h *EmbedHandler) renderReport(w http.ResponseWriter, r *http.Request, report *core.Report, params map[string]string) {
+func (h *EmbedHandler) renderReport(w http.ResponseWriter, r *http.Request, report *core.Report, params map[string][]string) {
 	// 1. Construct path to dashboard.html
 	htmlPath := filepath.Join("reports", report.ID, "dashboard.html")
 	
@@ -187,7 +187,7 @@ func (h *EmbedHandler) renderReport(w http.ResponseWriter, r *http.Request, repo
 }
 
 // generateReportConfig creates the ReportConfig JSON structure
-func generateReportConfig(report *core.Report, params map[string]string, currentURL string) string {
+func generateReportConfig(report *core.Report, params map[string][]string, currentURL string) string {
 	// Convert datasources to JSON
 	datasourcesJSON, _ := json.Marshal(report.Datasources)
 	

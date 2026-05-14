@@ -30,7 +30,7 @@ func main() {
 	genURL := flag.Bool("genurl", false, "Generate a signed URL")
 	reportID := flag.String("report", "", "Report ID for URL generation")
 	expiresSec := flag.Int("expires", 300, "Expiration in seconds from now")
-	paramsStr := flag.String("params", "", "Parameters as key=value,key=value")
+	paramsStr := flag.String("params", "", "Parameters as key=value|key=value (use | to separate pairs, , for multi-value)")
 	flag.Parse()
 
 	if *genURL {
@@ -218,15 +218,55 @@ func generateURL(reportID string, expiresSec int, paramsStr string) {
 	}
 
 	// Parse parameters
-	params := make(map[string]string)
+	params := make(map[string][]string)
 	if paramsStr != "" {
-		pairs := strings.Split(paramsStr, ",")
-		for _, pair := range pairs {
-			kv := strings.Split(pair, "=")
-			if len(kv) != 2 {
-				log.Fatalf("Invalid parameter format: %s (expected key=value)", pair)
+		// Parse parameters: key=value pairs separated by commas
+		// Values can contain commas, so we need smarter parsing
+		// We'll parse sequentially looking for key=value patterns
+		
+		// First, let's handle a simpler approach for now: require explicit format
+		// key=val1,val2,val3:key2=val4,val5
+		// Use : as separator between key-value pairs
+		// This is backward compatible? Actually old format was comma-separated pairs
+		// Let's support both: if we find : in the string, use it as pair separator
+		// Otherwise, fall back to old behavior (comma-separated pairs, no multi-value)
+		
+		if strings.Contains(paramsStr, "|") {
+			// New format with | as pair separator
+			pairs := strings.Split(paramsStr, "|")
+			for _, pair := range pairs {
+				kv := strings.SplitN(pair, "=", 2)
+				if len(kv) != 2 {
+					log.Fatalf("Invalid parameter format: %s (expected key=value)", pair)
+				}
+				key := strings.TrimSpace(kv[0])
+				valueStr := strings.TrimSpace(kv[1])
+				
+				// Split value by commas
+				if valueStr == "" {
+					params[key] = []string{""}
+				} else {
+					rawValues := strings.Split(valueStr, ",")
+					values := make([]string, len(rawValues))
+					for i, v := range rawValues {
+						values[i] = strings.TrimSpace(v)
+					}
+					params[key] = values
+				}
 			}
-			params[strings.TrimSpace(kv[0])] = strings.TrimSpace(kv[1])
+		} else {
+			// Old format: comma-separated key=value pairs (no multi-value support)
+			// For backward compatibility during transition
+			pairs := strings.Split(paramsStr, ",")
+			for _, pair := range pairs {
+				kv := strings.SplitN(pair, "=", 2)
+				if len(kv) != 2 {
+					log.Fatalf("Invalid parameter format: %s (expected key=value)", pair)
+				}
+				key := strings.TrimSpace(kv[0])
+				valueStr := strings.TrimSpace(kv[1])
+				params[key] = []string{valueStr}
+			}
 		}
 	}
 
@@ -262,9 +302,11 @@ func generateURL(reportID string, expiresSec int, paramsStr string) {
 		reportID, expires, nonce, sig)
 
 	// Add all parameters (including empty values for optional mutable parameters)
-	for key, value := range params {
-		// Always include parameter, even if empty
-		finalURL += fmt.Sprintf("&%s=%s", url.QueryEscape(key), url.QueryEscape(value))
+	for key, values := range params {
+		for _, value := range values {
+			// Always include parameter, even if empty
+			finalURL += fmt.Sprintf("&%s=%s", url.QueryEscape(key), url.QueryEscape(value))
+		}
 	}
 
 	fmt.Println(finalURL)

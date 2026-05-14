@@ -1,0 +1,102 @@
+# Report: Simple Multi-Value Parameter Test (ClassicModels)
+# ==========================================================
+# Tests multi-value parameters for both immutable and mutable params
+# using the classicmodels database (scale model car retailer).
+#
+# Immutable multi-value: country        → filters customers by country
+# Mutable multi-value:   productLine    → filters products by product line
+#
+# CLI example:
+#   go run main.go -genurl -report simple_multi_value_param_report \
+#     -params "country=USA|France|Australia,productLine=Classic Cars|Motorcycles"
+#
+# Note: | separates multi-values within a param, , separates different params
+
+id: simple_multi_value_param_report
+name: "Multi-Value Parameter Test (ClassicModels)"
+description: "Tests multi-value parameters for both immutable (country) and mutable (productLine) using the classicmodels database"
+database: classicmodels
+visibility: public
+expires_after: 3600
+max_rows: 10000
+
+# Immutable parameters (included in HMAC signature)
+# country supports multiple values via IN clause
+immutable_params:
+  - country
+
+# Mutable parameters (can be changed by users via UI)
+# productLine supports multiple values via IN clause
+mutable_params:
+  - productLine
+
+# Multi-value parameter declarations
+# These params use IN ({{param}}) SQL syntax instead of = {{param}}
+multi_value_params:
+  - country           # immutable multi-value
+  - productLine       # mutable multi-value
+
+# Datasources (SQL Queries)
+datasources:
+  # Returns customer count and total payments by country, filtered by productLine
+  country_sales:
+    sql: |
+      SELECT 
+        c.country,
+        COUNT(DISTINCT c.customerNumber) as customer_count,
+        COUNT(DISTINCT o.orderNumber) as order_count,
+        SUM(od.quantityOrdered * od.priceEach) as total_revenue,
+        AVG(od.quantityOrdered * od.priceEach) as avg_order_value
+      FROM customers c
+      LEFT JOIN orders o ON c.customerNumber = o.customerNumber
+      LEFT JOIN orderdetails od ON o.orderNumber = od.orderNumber
+      LEFT JOIN products p ON od.productCode = p.productCode
+      WHERE c.country IN ({{country}})
+        AND (coalesce({{productLine}},'')='' OR p.productLine IN ({{productLine}}))
+      GROUP BY c.country
+      ORDER BY total_revenue DESC
+    row_limit: 50
+    description: "Sales metrics by country, filtered by product line"
+
+  # Returns product-level detail for the selected countries and product lines
+  product_list:
+    sql: |
+      SELECT 
+        p.productCode,
+        p.productName,
+        p.productLine,
+        p.productScale,
+        p.buyPrice,
+        p.MSRP,
+        p.quantityInStock
+      FROM products p
+      JOIN orderdetails od ON p.productCode = od.productCode
+      JOIN orders o ON od.orderNumber = o.orderNumber
+      JOIN customers c ON o.customerNumber = c.customerNumber
+      WHERE c.country IN ({{country}})
+        AND (coalesce({{productLine}},'')='' OR p.productLine IN ({{productLine}}))
+      GROUP BY p.productCode, p.productName, p.productLine, 
+               p.productScale, p.buyPrice, p.MSRP, p.quantityInStock
+      ORDER BY p.productLine, p.productName
+    row_limit: 500
+    description: "Products with sales history from selected countries and product lines"
+
+  # Returns a single-row aggregate for the selected filters
+  overall_totals:
+    sql: |
+      SELECT 
+        COUNT(DISTINCT c.customerNumber) as total_customers,
+        COUNT(DISTINCT o.orderNumber) as total_orders,
+        COUNT(DISTINCT p.productCode) as total_products,
+        SUM(od.quantityOrdered) as total_units_sold,
+        SUM(od.quantityOrdered * od.priceEach) as total_revenue,
+        AVG(od.quantityOrdered * od.priceEach) as avg_order_value
+      FROM customers c
+      LEFT JOIN orders o ON c.customerNumber = o.customerNumber
+      LEFT JOIN orderdetails od ON o.orderNumber = od.orderNumber
+      LEFT JOIN products p ON od.productCode = p.productCode
+      WHERE c.country IN ({{country}})
+        AND (coalesce({{productLine}},'')='' OR p.productLine IN ({{productLine}}))
+    row_limit: 1
+    cache_ttl: 300
+    description: "Overall aggregate statistics across selected filters"
