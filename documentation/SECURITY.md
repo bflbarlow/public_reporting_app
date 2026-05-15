@@ -18,7 +18,7 @@ The embed handler validates:
 2. **Nonce** — checked against `NonceTracker` (in-memory map, 60s cleanup) — replay protection
 3. **HMAC Signature** — the critical trust step (see below)
 
-The server responds by rendering `reports/{reportID}/dashboard.html` with a `<script>window.ReportConfig = {...}</script>` injected before `</body>`. The config contains:
+The server responds by rendering `reports/{reportID}/report.html` with a `<script>window.ReportConfig = {...}</script>` injected before `</body>`. The config contains:
 
 - `currentUrl` — the full signed embed URL
 - `params`, `immutableParams`, `mutableParams`, `datasources`

@@ -935,8 +935,8 @@ cd my_new_report
 # Edit report.yaml
 vim report.yaml  # Update id, name, description, SQL
 
-# Edit dashboard.html
-vim dashboard.html  # Update visualizations
+# Edit report.html
+vim report.html  # Update visualizations
 ```
 
 **Template Customization Checklist:**
@@ -948,7 +948,7 @@ vim dashboard.html  # Update visualizations
   - Replace SQL queries with your actual queries
   - Adjust `row_limit` values
 
-- [ ] **Update `dashboard.html`**:
+- [ ] **Update `report.html`**:
   - Change page title and headers
   - Update filter controls to match your parameters
   - Replace chart configurations with your visualizations
@@ -1001,7 +1001,7 @@ go run main.go
 
 **Console Debugging:**
 ```javascript
-// Add to dashboard.html for development
+// Add to report.html for development
 window.enableDebug = true;
 
 if (window.enableDebug) {
@@ -1054,7 +1054,7 @@ SHOW PROFILE FOR QUERY 1;
 reports/
 ├── my_report/
 │   ├── report.yaml      # Tracked
-│   ├── dashboard.html   # Tracked
+│   ├── report.html   # Tracked
 │   ├── custom.js        # Tracked (if separate)
 │   └── .gitignore       # Ignore backup files
 └── report_template/     # Reference only
@@ -1183,7 +1183,7 @@ docs(report): Add README for referral_funnel_dashboard
 3. [ ] Define immutable and mutable parameters
 4. [ ] Write secure SQL queries with organization_id filters
 5. [ ] Set appropriate row_limit values
-6. [ ] Customize `dashboard.html` with your visualizations
+6. [ ] Customize `report.html` with your visualizations
 7. [ ] Test with generated URLs
 8. [ ] Verify security, performance, and UX
 

@@ -24,7 +24,7 @@ These details are to *ALWAYS* be maintained with every code change.
 | Term | Definition |
 |------|------------|
 | **Client** | The web browser that loads both the Parent Application and the Reporting App via iframes. Executes client-side JavaScript and manages user interaction with embedded reports. |
-| **Report** | A named collection of charts that display data from one or more databases. Defined by a `report.yaml` file and a `dashboard.html` template. Each datasource can specify its own database via `datasources.{name}.database`, falling back to `report.database`. |
+| **Report** | A named collection of charts that display data from one or more databases. Defined by a `report.yaml` file and a `report.html` template. Each datasource can specify its own database via `datasources.{name}.database`, falling back to `report.database`. |
 | **Page** | The HTML document served by the Reporting App that contains a fully hydrated report. The page includes inline data, JavaScript for interactivity, and strict security headers. |
 | **Chart** | A single visual element within a report (e.g., line chart, bar chart, table). Each chart has a unique ID, a title, a SQL query, and rendering configuration. |
 | **Thick Client** | The JavaScript code (`/static/thick_client.js`) that runs inside the iframe and handles all client-side interactivity-filtering, charting, drill-down, and AJAX refresh. |
@@ -40,7 +40,7 @@ These details are to *ALWAYS* be maintained with every code change.
 | **Parameterized Query** | A SQL query that contains placeholders like `{{start_date}}` which are safely replaced with values from the URL query string, preventing SQL injection. |
 | **Refresh Endpoint** | The `/refresh` API endpoint that accepts a signed URL and returns fresh data plus a new signed URL, enabling AJAX-based updates without page reloads. |
 | **Chart Data** | The JSON-encoded query results (columns and rows) for a chart, embedded inline in the page as `window.__chart_data__`. |
-| **dashboard.html** | The report held in an html file defining the look (css), structure (html), and interactivity (JavaScript). Location: `reports/{report}/dashboard.html`. |
+| **report.html** | The report held in an html file defining the look (css), structure (html), and interactivity (JavaScript). Location: `reports/{report}/report.html`. |
 | **report.yaml** | A YAML file defining datasource-based reports. Contains datasource definitions, parameter schemas, and configuration for JavaScript-first development. Location: `reports/{report}/report.yaml`. |
 | **Datasource** | A named SQL query in a manifest that provides data to JavaScript visualizations. Has parameter substitution, caching, and execution limits. |
 | **Client API** | The `window.__reportData` object injected into datasource-based reports, providing structured access to datasources via `getRows()` and `getColumns()` methods. These methods use the thick client (`window.ReportApp.refreshDatasource()`) as the sole data bridge to the reporting app. Direct API endpoints are disabled. |
@@ -129,7 +129,7 @@ datasources:
     cache_ttl: 300  # Optional caching
 ```
 
-3. Optionally add `dashboard.html` for custom UI
+3. Optionally add `report.html` for custom UI
 
 4. Generate a signed URL (tools coming soon)
 

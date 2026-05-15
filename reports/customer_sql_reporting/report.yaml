@@ -205,7 +205,7 @@ datasources:
 # 4. ERROR HANDLING:
 #    - Test queries with NULL/empty parameter values
 #    - Ensure date ranges are valid (start_date <= end_date)
-#    - Handle missing data gracefully in dashboard.html
+#    - Handle missing data gracefully in report.html
 #
 # 5. TESTING:
 #    - Generate test URL: go run main.go -genurl -report report_template -params "organization_id=1,start_date=2024-01-01,end_date=2024-12-31"
@@ -216,5 +216,5 @@ datasources:
 # 1. Copy this directory: cp -r reports/report_template reports/my_new_report
 # 2. Update id, name, description in report.yaml
 # 3. Replace SQL queries with your actual queries
-# 4. Update dashboard.html with your visualizations
+# 4. Update report.html with your visualizations
 # 5. Test your report thoroughly

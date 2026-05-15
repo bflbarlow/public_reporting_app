@@ -439,7 +439,7 @@ All of these belong to the report's JavaScript, which is loaded alongside the Th
 reports/
 └── my_dashboard/
     ├── report.yaml      # Report definition (datasources, params)
-    ├── dashboard.html   # HTML layout
+    ├── report.html   # HTML layout
     └── report.js        # Report's own JS (rendering, coordination, UI)
 ```
 

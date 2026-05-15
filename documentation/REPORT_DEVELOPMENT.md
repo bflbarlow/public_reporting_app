@@ -8,7 +8,7 @@ This guide covers everything you need to know to build, test, and deploy reports
 
 | Concept | Description |
 |---------|-------------|
-| **Report** | A collection of datasources (SQL queries) and visualizations that display data from one or more databases. Defined by a `report.yaml` file and optional `dashboard.html` template. Each datasource can specify its own database via `datasources.{name}.database`, falling back to `report.database`. |
+| **Report** | A collection of datasources (SQL queries) and visualizations that display data from one or more databases. Defined by a `report.yaml` file and optional `report.html` template. Each datasource can specify its own database via `datasources.{name}.database`, falling back to `report.database`. |
 | **Datasource** | A named SQL query that provides data to visualizations. Each datasource has a SQL statement with parameter placeholders, row limits, and optional caching. |
 | **Thick Client** | JavaScript layer (`window.ReportApp`) that acts as the sole data bridge between your report and the server. Handles security validation, parameter management, and data refreshing. |
 | **Immutable Parameters** | Security-critical parameters included in HMAC signatures (e.g., `organization_id`, `user_id`). Cannot be changed after URL signing. |
@@ -28,14 +28,14 @@ cp -r report_template my_new_report
 cd my_new_report
 ```
 
-Then edit `report.yaml` and `dashboard.html` to match your requirements.
+Then edit `report.yaml` and `report.html` to match your requirements.
 
 ### 1.2 Directory Structure
 
 ```
 reports/my_new_report/
 ├── report.yaml      # Report definition (required)
-├── dashboard.html   # HTML/JS dashboard (optional)
+├── report.html   # HTML/JS report (optional)
 └── custom.js        # Additional JavaScript (optional)
 ```
 
@@ -125,7 +125,7 @@ datasources:
 
 ### 1.5 Dashboard HTML Template
 
-Create a `dashboard.html` file that includes:
+Create a `report.html` file that includes:
 
 1. **HTML structure** for your visualizations
 2. **JavaScript** that interacts with the thick client
@@ -144,7 +144,7 @@ The thick client JavaScript (`/static/thick_client.js`) is automatically injecte
 <script src="report.js"></script>
 ```
 
-See the `report_template/dashboard.html` for a complete example with loading states, error handling, and debug panel.
+See the `report_template/report.html` for a complete example with loading states, error handling, and debug panel.
 
 ## 2. Parameter System
 

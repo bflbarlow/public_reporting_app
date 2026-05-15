@@ -11,7 +11,7 @@ databases.yaml
 query_log/
 
 # Report-specific files (user-generated, not part of the template)
-# reports/*/dashboard.html
+# reports/*/report.html
 # reports/*/report.js
 # reports/*/manifest.yaml
 # reports/*/data/

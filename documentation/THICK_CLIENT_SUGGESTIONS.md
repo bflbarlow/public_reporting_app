@@ -8,11 +8,11 @@
 
 ## Issues Found and Fixes Applied
 
-### 1. CRITICAL: Thick client script not loaded in dashboard.html
+### 1. CRITICAL: Thick client script not loaded in report.html
 
-**Problem:** The `dashboard.html` had a comment saying "Thick Client is automatically injected by the server" but contained **no `<script>` tag** to load `/static/thick_client.js`. Without the thick client, `window.ReportApp` is never defined, so the dashboard silently does nothing.
+**Problem:** The `report.html` had a comment saying "Thick Client is automatically injected by the server" but contained **no `<script>` tag** to load `/static/thick_client.js`. Without the thick client, `window.ReportApp` is never defined, so the dashboard silently does nothing.
 
-**Fix Applied:** Added `<script src="/static/thick_client.js"></script>` to `dashboard.html` in the `<head>` section.
+**Fix Applied:** Added `<script src="/static/thick_client.js"></script>` to `report.html` in the `<head>` section.
 
 **Impact:** This is the **primary cause** of the no-data issue. The thick client is the data bridge between the reporting app server and the report's JavaScript. Without it, `window.ReportApp.refresh()` is undefined and no data is ever fetched.
 
@@ -38,7 +38,7 @@ AND ({{referral_status_filter}} IS NULL OR r.referral_status IS NULL OR r.referr
 
 ---
 
-### 3. Improved error visibility in dashboard.html
+### 3. Improved error visibility in report.html
 
 **Problem:** When the thick client is unavailable or data loading fails, the error messages were too generic to diagnose.
 
@@ -57,13 +57,13 @@ AND ({{referral_status_filter}} IS NULL OR r.referral_status IS NULL OR r.referr
 
 ### Request 1: Auto-inject thick client script in embed handler
 
-**Problem:** The embed handler's `renderReport()` only injects `ReportConfig` but does **not** inject the thick client script. Report developers must manually add `<script src="/static/thick_client.js"></script>` to every `dashboard.html`. This is a silent failure point.
+**Problem:** The embed handler's `renderReport()` only injects `ReportConfig` but does **not** inject the thick client script. Report developers must manually add `<script src="/static/thick_client.js"></script>` to every `report.html`. This is a silent failure point.
 
 **Proposed change in `internal/handler/embed.go`, `renderReport()`:**
 
 ```go
 func (h *EmbedHandler) renderReport(w http.ResponseWriter, r *http.Request, report *core.Report, params map[string]string) {
-    htmlPath := filepath.Join("reports", report.ID, "dashboard.html")
+    htmlPath := filepath.Join("reports", report.ID, "report.html")
     content, err := os.ReadFile(htmlPath)
     if err != nil {
         http.Error(w, "Report HTML not found", http.StatusInternalServerError)
@@ -175,8 +175,8 @@ func injectReportConfig(htmlContent string, configJSON string, includeThickClien
 
 | File | Change | Type |
 |------|--------|------|
-| `dashboard.html` | Added `<script src="/static/thick_client.js"></script>` | Critical fix |
-| `dashboard.html` | Enhanced console logging and error messages | Improvement |
+| `report.html` | Added `<script src="/static/thick_client.js"></script>` | Critical fix |
+| `report.html` | Enhanced console logging and error messages | Improvement |
 | `report.yaml` | Fixed NULL comparison in `referral_status_filter` (3 queries) | Bug fix |
 
 ---
