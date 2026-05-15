@@ -1,5 +1,7 @@
 package core
 
+import "time"
+
 const (
 	// Default values
 	DefaultRowLimit    = 10000
@@ -24,9 +26,24 @@ const (
 	EndpointRefresh = "/refresh"
 	EndpointHealth  = "/health"
 	EndpointStatic  = "/static/"
-	
-	// Security limits
-	MaxURLExpirySeconds   = 300    // 5 minutes
-	RefreshGraceSeconds   = 300    // 5 minutes grace for refresh
-	NonceCleanupInterval  = 60     // seconds
 )
+
+// DefaultSecurityConfig returns a SecurityConfig with all Phase 1 defaults.
+func DefaultSecurityConfig() SecurityConfig {
+	return SecurityConfig{
+		Nonce: NonceConfig{
+			Bytes:           32,
+			Encoding:        "urlsafe-base64",
+			MaxAge:          24 * time.Hour,
+			CleanupInterval: 60 * time.Second,
+			MaxUses:         1,
+			UseWindow:       5 * time.Minute,
+		},
+		Expiry: URLExpiryConfig{
+			Default: 5 * time.Minute,
+			Min:     1 * time.Minute,
+			Max:     24 * time.Hour,
+		},
+		RefreshGrace: 0,
+	}
+}

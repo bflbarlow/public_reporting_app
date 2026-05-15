@@ -18,25 +18,36 @@ import (
 
 // EmbedHandler handles GET /api/embed requests
 type EmbedHandler struct {
-	loader      *loader.Loader
-	dbManager   *database.Manager
-	nonceTracker *security.NonceTracker
-	hmacSecret  []byte
+	loader          *loader.Loader
+	dbManager       *database.Manager
+	nonceTracker    *security.NonceTracker
+	hmacSecret      []byte
 	enablePublicPaths bool
 	allowOrigins    []string
 	allowedCDNs     []string
+	securityConfig  core.SecurityConfig
 }
 
-// NewEmbedHandler creates a new embed handler
-func NewEmbedHandler(loader *loader.Loader, dbManager *database.Manager, nonceTracker *security.NonceTracker, hmacSecret []byte, enablePublicPaths bool, allowOrigins []string, allowedCDNs []string) *EmbedHandler {
+// NewEmbedHandler creates a new embed handler.
+func NewEmbedHandler(
+	loader *loader.Loader,
+	dbManager *database.Manager,
+	nonceTracker *security.NonceTracker,
+	hmacSecret []byte,
+	enablePublicPaths bool,
+	allowOrigins []string,
+	allowedCDNs []string,
+	securityConfig core.SecurityConfig,
+) *EmbedHandler {
 	return &EmbedHandler{
-		loader:      loader,
-		dbManager:   dbManager,
-		nonceTracker: nonceTracker,
-		hmacSecret:  hmacSecret,
+		loader:          loader,
+		dbManager:       dbManager,
+		nonceTracker:    nonceTracker,
+		hmacSecret:      hmacSecret,
 		enablePublicPaths: enablePublicPaths,
 		allowOrigins:    allowOrigins,
 		allowedCDNs:     allowedCDNs,
+		securityConfig:  securityConfig,
 	}
 }
 
@@ -113,7 +124,7 @@ func (h *EmbedHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	// Reject if expires too far in future
-	if expires > now+core.MaxURLExpirySeconds {
+	if expires > now+int64(h.securityConfig.Expiry.Max) {
 		h.addCORSHeaders(w, r)
 		http.Error(w, "URL expires too far in future", http.StatusBadRequest)
 		return
@@ -176,7 +187,7 @@ func (h *EmbedHandler) renderReport(w http.ResponseWriter, r *http.Request, repo
 	}
 	
 	// 3. Generate ReportConfig JSON
-	config := generateReportConfig(report, params, r.URL.String())
+	config := generateReportConfig(report, params, r.URL.String(), h.securityConfig)
 	
 	// 4. Inject configuration into HTML
 	htmlWithConfig := injectReportConfig(string(content), config)
@@ -186,8 +197,8 @@ func (h *EmbedHandler) renderReport(w http.ResponseWriter, r *http.Request, repo
 	w.Write([]byte(htmlWithConfig))
 }
 
-// generateReportConfig creates the ReportConfig JSON structure
-func generateReportConfig(report *core.Report, params map[string][]string, currentURL string) string {
+// generateReportConfig creates the ReportConfig JSON structure.
+func generateReportConfig(report *core.Report, params map[string][]string, currentURL string, securityConfig core.SecurityConfig) string {
 	// Convert datasources to JSON
 	datasourcesJSON, _ := json.Marshal(report.Datasources)
 	
@@ -203,6 +214,12 @@ func generateReportConfig(report *core.Report, params map[string][]string, curre
 		"mutableParams":   report.MutableParams,
 		"datasources":    string(datasourcesJSON),
 		"currentUrl":     currentURL,
+		"urlExpiry": map[string]interface{}{
+			"default": int64(securityConfig.Expiry.Default),
+			"min":     int64(securityConfig.Expiry.Min),
+			"max":     int64(securityConfig.Expiry.Max),
+		},
+		"refreshGrace": int64(securityConfig.RefreshGrace),
 	}
 	
 	// Convert to JSON string

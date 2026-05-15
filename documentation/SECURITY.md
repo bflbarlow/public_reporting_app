@@ -15,7 +15,7 @@ GET /api/embed?report_id=X&expires=Y&nonce=Z&sig=W&...
 The embed handler validates:
 
 1. **Expiration** — `expires < now` → rejected
-2. **Nonce** — checked against `NonceTracker` (in-memory map, 60s cleanup) — replay protection
+2. **Nonce** — checked against `NonceTracker` (in‑memory map, configurable cleanup interval) — replay protection
 3. **HMAC Signature** — the critical trust step (see below)
 
 The server responds by rendering `reports/{reportID}/report.html` with a `<script>window.ReportConfig = {...}</script>` injected before `</body>`. The config contains:
@@ -115,6 +115,32 @@ Each datasource can optionally specify its own database via `datasources.{name}.
 - Database names must exist in `databases.yaml` — validation errors are logged at startup but the report still loads (runtime will fail with a clear error if the DB doesn't exist)
 - This validation is a **startup-time warning only** — it does not block report loading, ensuring zero breaking changes for existing reports
 
+### 8. Configurable Security Parameters (Phase 1)
+
+All security timeouts and limits are now configurable via environment variables:
+
+#### URL Expiration
+- `URL_EXPIRY_DEFAULT` — default URL lifetime (default: `5m`)
+- `URL_EXPIRY_MIN` — minimum allowed expiration (default: `1m`)
+- `URL_EXPIRY_MAX` — maximum allowed expiration (default: `24h`)
+- `REFRESH_GRACE_PERIOD` — grace period after expiry (default: `0s`)
+
+#### NONCE Settings
+- `NONCE_BYTES` — random bytes (16‑64, default: `32`)
+- `NONCE_ENCODING` — encoding format (`urlsafe-base64`, `base64`, `hex`, default: `urlsafe-base64`)
+- `NONCE_MAX_AGE` — maximum nonce lifetime (default: `24h`)
+- `NONCE_CLEANUP_INTERVAL` — cleanup frequency (default: `60s`)
+- `NONCE_MAX_USES` — max uses per nonce (default: `1`, single‑use)
+- `NONCE_USE_WINDOW` — sliding window for multi‑use (default: `5m`)
+
+**Defaults match previous hardcoded values** — zero‑downtime migration.
+
+#### Nonce Usage Pattern
+- `/api/embed` — consumes one nonce use (replay protection)
+- `/refresh` — does **not** consume nonce uses (allows multiple refreshes)
+
+See `NONCE_AND_URL_EXPIRY_CONFIG.md` for complete documentation.
+
 ## Summary
 
 The server trusts a refresh request if and only if:
@@ -122,6 +148,6 @@ The server trusts a refresh request if and only if:
 1. The **HMAC signature** on the original embed URL is valid (proving the request chain started from a properly signed URL)
 2. The **nonce** hasn't been used before (prevents replay of the embed URL itself)
 3. The **immutable parameters** haven't been altered
-4. The **expiration** hasn't passed (with 5-min grace)
+4. The **expiration** hasn't passed (with configurable grace period)
 
-The trust is **cryptographic**, not session-based. The `HMAC_SECRET` environment variable is the single shared secret between the URL generator (client-side or admin tool) and the server.
+The trust is **cryptographic**, not session‑based. The `HMAC_SECRET` environment variable is the single shared secret between the URL generator (client‑side or admin tool) and the server.
