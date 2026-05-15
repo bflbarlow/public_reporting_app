@@ -107,6 +107,14 @@ This is returned as `next_url` in the JSON response. The client uses this for su
 
 If `ENABLE_PUBLIC_PATHS=true`, **all HMAC verification is skipped**. The server only validates that the report exists and params match the schema. This is explicitly a development/testing mode.
 
+### 7. Datasource-Level Database Validation
+
+Each datasource can optionally specify its own database via `datasources.{name}.database`. The server validates this at startup:
+
+- At least one of `report.database` or a datasource-level `database` must be set for the report to be valid
+- Database names must exist in `databases.yaml` — validation errors are logged at startup but the report still loads (runtime will fail with a clear error if the DB doesn't exist)
+- This validation is a **startup-time warning only** — it does not block report loading, ensuring zero breaking changes for existing reports
+
 ## Summary
 
 The server trusts a refresh request if and only if:

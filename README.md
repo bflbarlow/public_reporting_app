@@ -24,7 +24,7 @@ These details are to *ALWAYS* be maintained with every code change.
 | Term | Definition |
 |------|------------|
 | **Client** | The web browser that loads both the Parent Application and the Reporting App via iframes. Executes client-side JavaScript and manages user interaction with embedded reports. |
-| **Report** | A named collection of charts that display data from a specific database. Defined by a `metadata.yaml` file and a `dashboard.html` template. |
+| **Report** | A named collection of charts that display data from one or more databases. Defined by a `report.yaml` file and a `dashboard.html` template. Each datasource can specify its own database via `datasources.{name}.database`, falling back to `report.database`. |
 | **Page** | The HTML document served by the Reporting App that contains a fully hydrated report. The page includes inline data, JavaScript for interactivity, and strict security headers. |
 | **Chart** | A single visual element within a report (e.g., line chart, bar chart, table). Each chart has a unique ID, a title, a SQL query, and rendering configuration. |
 | **Thick Client** | The JavaScript code (`/static/thick_client.js`) that runs inside the iframe and handles all client-side interactivity-filtering, charting, drill-down, and AJAX refresh. |
@@ -36,7 +36,7 @@ These details are to *ALWAYS* be maintained with every code change.
 | **Nonce** | A random, single-use token that prevents replay attacks. Each signed URL includes a unique nonce that can only be used once. |
 | **CSP** | Content Security Policy-a set of HTTP headers that restrict which resources (scripts, styles, etc.) the browser can load, preventing XSS and other attacks. |
 | **CORS** | Cross-Origin Resource Sharing-headers that control which external domains are allowed to embed the Reporting App's pages via iframes. |
-| **Database Connection** | A read-only connection to a SQL database, defined in `databases.yaml`. Each report is associated with one database connection. |
+| **Database Connection** | A read-only connection to a SQL database, defined in `databases.yaml`. Reports can use a single database (via `report.database`) or multiple databases (via `datasources.{name}.database`). |
 | **Parameterized Query** | A SQL query that contains placeholders like `{{start_date}}` which are safely replaced with values from the URL query string, preventing SQL injection. |
 | **Refresh Endpoint** | The `/refresh` API endpoint that accepts a signed URL and returns fresh data plus a new signed URL, enabling AJAX-based updates without page reloads. |
 | **Chart Data** | The JSON-encoded query results (columns and rows) for a chart, embedded inline in the page as `window.__chart_data__`. |
@@ -115,8 +115,11 @@ mutable_params:
   - end_date
 
 # Datasources (SQL queries)
+# Each datasource can optionally specify its own database connection.
+# If omitted, the report-level 'database' field is used as the fallback.
 datasources:
   summary:
+    database: default    # optional — falls back to report.database if omitted
     sql: |
       SELECT COUNT(*) as count
       FROM orders
@@ -211,6 +214,29 @@ connections:
     read_only: true
     timeout: "30s"
     row_limit: 10000
+```
+
+### Multi-Database Reports
+Reports can query multiple databases — each datasource specifies its own database:
+
+```yaml
+id: cross_database_report
+database: default          # fallback for datasources without a database field
+
+datasources:
+  customer_data:
+    database: customer_sql  # datasource-level override
+    sql: |
+      SELECT * FROM customers WHERE ...
+
+  program_data:
+    database: classicmodels  # another datasource uses a different DB
+    sql: |
+      SELECT * FROM products WHERE ...
+
+  fallback_report:
+    # No database field — uses report.database ("default") as fallback
+    sql: SELECT * FROM default_table WHERE ...
 ```
 
 ## Development

@@ -66,6 +66,16 @@ func (l *Loader) Reload() error {
 			return fs.SkipDir
 		}
 		
+		// Validate report
+		validDBs, err := loadValidDBs()
+		if err != nil {
+			log.Printf("Warning: could not load databases.yaml for validation: %v (report %s loaded without validation)", err, reportID)
+		} else {
+			if err := ValidateReport(report, validDBs); err != nil {
+				log.Printf("Warning: report %s validation failed: %v (loaded anyway)", reportID, err)
+			}
+		}
+		
 		// Ensure ID matches directory name
 		if report.ID == "" {
 			report.ID = reportID
@@ -217,8 +227,39 @@ func parseDatasource(data interface{}) (core.Datasource, error) {
 			ds.CacheTTL = cacheTTL
 		}
 		
+		if db, ok := m["database"].(string); ok && db != "" {
+			ds.Database = db
+		}
+		
 		return ds, nil
 	}
 	
 	return ds, fmt.Errorf("datasource must be a map with sql field")
+}
+
+// loadValidDBs reads databases.yaml and returns a set of valid connection names
+func loadValidDBs() (map[string]bool, error) {
+	// Try common paths
+	configPaths := []string{"./databases.yaml", "databases.yaml"}
+	for _, path := range configPaths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		
+		var raw struct {
+			Connections map[string]interface{} `yaml:"connections"`
+		}
+		if err := yaml.Unmarshal(data, &raw); err != nil {
+			continue
+		}
+		
+		valid := make(map[string]bool, len(raw.Connections))
+		for name := range raw.Connections {
+			valid[name] = true
+		}
+		return valid, nil
+	}
+	
+	return nil, fmt.Errorf("databases.yaml not found")
 }

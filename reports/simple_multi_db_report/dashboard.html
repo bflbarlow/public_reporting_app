@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Database Cross-Reference</title>
+    <script src="/static/thick_client.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f6fa; color: #2c3e50; padding: 20px;
+        }
+        .dashboard { max-width: 1400px; margin: 0 auto; }
+        .header {
+            background: white; border-radius: 12px; padding: 24px 28px;
+            margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            border-left: 5px solid #636efa;
+        }
+        .header h1 { font-size: 24px; margin-bottom: 4px; }
+        .header p { color: #7f8c8d; font-size: 14px; }
+        .db-badge {
+            display: inline-block; padding: 2px 8px; border-radius: 4px;
+            font-size: 11px; font-weight: 600; margin-left: 8px;
+        }
+        .db-customer-sql { background: #e8f5e9; color: #2e7d32; }
+        .db-classicmodels { background: #e3f2fd; color: #1565c0; }
+        .filters {
+            background: white; border-radius: 12px; padding: 20px 24px;
+            margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .filters label { font-weight: 600; font-size: 13px; color: #555; display: block; margin-bottom: 4px; }
+        .filters select {
+            padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px;
+            font-size: 14px; width: 200px;
+        }
+        .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+        .card {
+            background: white; border-radius: 12px; padding: 20px 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .card h3 { font-size: 15px; margin-bottom: 12px; color: #555; }
+        .card .chart-container { position: relative; height: 260px; }
+        .table-wrap { max-height: 260px; overflow-y: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { text-align: left; padding: 8px 10px; background: #f8f9fa; color: #555; font-weight: 600; position: sticky; top: 0; }
+        td { padding: 7px 10px; border-top: 1px solid #eee; }
+        .loading { opacity: 0.5; pointer-events: none; }
+        .error { background: #fce4ec; color: #c62828; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: none; }
+    </style>
+</head>
+<body>
+    <div class="dashboard" id="dashboard">
+        <div class="error" id="error-msg"></div>
+
+        <div class="header">
+            <h1>Multi-Database Cross-Reference
+                <span class="db-badge db-customer-sql">customer_sql</span>
+                <span class="db-badge db-classicmodels">classicmodels</span>
+            </h1>
+            <p>Seeker demographics from customer_sql + customer/product data from classicmodels</p>
+        </div>
+
+        <div class="filters">
+            <div style="display: flex; gap: 24px; align-items: flex-end;">
+                <div>
+                    <label>Program Status</label>
+                    <select id="program-status">
+                        <option value="">All Statuses</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Category</label>
+                    <select id="category">
+                        <option value="">All Categories</option>
+                    </select>
+                </div>
+                <button onclick="doRefresh()" style="padding: 8px 20px; background: #636efa; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">Refresh</button>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3>Seeker Demographics <span class="db-badge db-customer-sql">customer_sql</span></h3>
+                <div class="chart-container"><canvas id="chart-demographics"></canvas></div>
+            </div>
+            <div class="card">
+                <h3>Customer Overview <span class="db-badge db-classicmodels">classicmodels</span></h3>
+                <div class="table-wrap" id="table-customers"></div>
+            </div>
+            <div class="card">
+                <h3>Product Summary <span class="db-badge db-classicmodels">classicmodels</span></h3>
+                <div class="chart-container"><canvas id="chart-products"></canvas></div>
+            </div>
+            <div class="card">
+                <h3>Program Status <span class="db-badge db-customer-sql">customer_sql</span></h3>
+                <div class="chart-container"><canvas id="chart-programs"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let charts = {};
+
+        function showError(msg) {
+            const el = document.getElementById('error-msg');
+            el.textContent = msg;
+            el.style.display = 'block';
+        }
+
+        function doRefresh() {
+            document.body.classList.add('loading');
+            const programStatus = document.getElementById('program-status').value;
+            const category = document.getElementById('category').value;
+            const params = {};
+            if (programStatus) params.program_status = programStatus;
+            if (category) params.category = category;
+
+            window.ReportApp.refresh(params)
+                .then(data => {
+                    updateCharts(data);
+                    document.body.classList.remove('loading');
+                })
+                .catch(err => {
+                    showError('Refresh failed: ' + err.message);
+                    document.body.classList.remove('loading');
+                });
+        }
+
+        function updateCharts(data) {
+            // Demographics (customer_sql)
+            const demo = data.seeker_demographics;
+            if (demo && demo.rows && demo.rows.length) {
+                renderBarChart('chart-demographics',
+                    demo.rows.map(r => r[0]),
+                    demo.rows.map(r => r[1]),
+                    'Seeker Count'
+                );
+            }
+
+            // Customers table (classicmodels)
+            const cust = data.customer_overview;
+            if (cust && cust.rows && cust.rows.length) {
+                let html = '<table><thead><tr><th>Country</th><th>Customers</th><th>Avg Credit</th></tr></thead><tbody>';
+                cust.rows.forEach(r => {
+                    const count = parseInt(r[1], 10) || 0;
+                    const avg = parseFloat(r[2]) || 0;
+                    html += '<tr><td>' + r[0] + '</td><td>' + count + '</td><td>' + avg.toFixed(0) + '</td></tr>';
+                });
+                html += '</tbody></table>';
+                document.getElementById('table-customers').innerHTML = html;
+            }
+
+            // Products (classicmodels)
+            const prod = data.product_summary;
+            if (prod && prod.rows && prod.rows.length) {
+                renderBarChart('chart-products',
+                    prod.rows.map(r => r[0]),
+                    prod.rows.map(r => r[2]),
+                    'Avg Price'
+                );
+            }
+
+            // Programs (customer_sql)
+            const prog = data.program_status;
+            if (prog && prog.rows && prog.rows.length) {
+                renderPieChart('chart-programs',
+                    prog.rows.map(r => r[0]),
+                    prog.rows.map(r => r[1])
+                );
+            }
+        }
+
+        function renderBarChart(canvasId, labels, values, label) {
+            if (charts[canvasId]) charts[canvasId].destroy();
+            charts[canvasId] = new Chart(document.getElementById(canvasId), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{ label: label, data: values.map(v => parseFloat(v) || 0), backgroundColor: '#636efa' }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+        }
+
+        function renderPieChart(canvasId, labels, values) {
+            if (charts[canvasId]) charts[canvasId].destroy();
+            const colors = ['#636efa', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+            charts[canvasId] = new Chart(document.getElementById(canvasId), {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{ data: values.map(v => parseInt(v, 10) || 0), backgroundColor: colors }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        function populateSelects(data) {
+            const prog = data.program_status;
+            if (prog && prog.rows && prog.rows.length) {
+                const sel = document.getElementById('program-status');
+                sel.innerHTML = '<option value="">All Statuses</option>';
+                prog.rows.forEach(r => {
+                    const opt = document.createElement('option');
+                    opt.value = r[0];
+                    opt.textContent = r[0] + ' (' + r[1] + ')';
+                    sel.appendChild(opt);
+                });
+            }
+
+            // Populate category options from product_summary
+            const prod = data.product_summary;
+            if (prod && prod.rows && prod.rows.length) {
+                const sel = document.getElementById('category');
+                sel.innerHTML = '<option value="">All Categories</option>';
+                prod.rows.forEach(r => {
+                    const opt = document.createElement('option');
+                    opt.value = r[0];
+                    opt.textContent = r[0] + ' (' + r[1] + ')';
+                    sel.appendChild(opt);
+                });
+            }
+        }
+
+        // Init
+        document.addEventListener('DOMContentLoaded', async function() {
+            if (!window.ReportApp || typeof window.ReportApp.refresh !== 'function') {
+                document.getElementById('error-msg').textContent = 'Thick client not available. Access via reporting app.';
+                document.getElementById('error-msg').style.display = 'block';
+                return;
+            }
+            const data = await window.ReportApp.refresh();
+            populateSelects(data);
+            updateCharts(data);
+        });
+    </script>
+</body>
+</html>

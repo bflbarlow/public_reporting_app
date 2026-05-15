@@ -23,6 +23,7 @@ type Report struct {
 
 // Datasource defines a single data query
 type Datasource struct {
+	Database string // datasource-level DB override (empty = use report.Database)
 	SQL      string
 	RowLimit int    // 0 = use default
 	CacheTTL int    // 0 = no caching, seconds

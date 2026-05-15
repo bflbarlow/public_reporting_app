@@ -315,39 +315,45 @@ func slicesEqual(a, b []string) bool {
 
 // executeDatasources executes all datasource queries
 func (h *RefreshHandler) executeDatasources(report *core.Report, params map[string][]string) (map[string]interface{}, error) {
-	// Get database connection
-	db, err := h.dbManager.GetClient(report.Database)
-	if err != nil {
-		return nil, fmt.Errorf("database connection failed: %w", err)
-	}
-	
-	// Get connection config for defaults
-	connConfig, err := h.dbManager.ConnectionConfig(report.Database)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get connection config: %w", err)
-	}
-	
-	// Parse timeout
-	timeout := 30 * time.Second
-	if connConfig.Timeout != "" {
-		d, err := time.ParseDuration(connConfig.Timeout)
-		if err != nil {
-			log.Printf("Invalid timeout %q, using default 30s: %v", connConfig.Timeout, err)
-		} else {
-			timeout = d
-		}
-	}
-	
-	// Determine row limit
-	rowLimit := connConfig.RowLimit
-	if report.MaxRows > 0 && report.MaxRows < rowLimit {
-		rowLimit = report.MaxRows
-	}
-	
-	// Execute each datasource
+	// Execute each datasource (resolving database per-datasource)
 	result := make(map[string]interface{})
 	for name, ds := range report.Datasources {
-		queryResult, err := h.dbManager.ExecuteDatasource(db, ds, params, report, rowLimit, timeout, report.ID, name, report.Database)
+		// Resolve database: datasource-level override, then report-level fallback
+		dbName := ds.Database
+		if dbName == "" {
+			dbName = report.Database
+		}
+		
+		// Get database connection
+		db, err := h.dbManager.GetClient(dbName)
+		if err != nil {
+			return nil, fmt.Errorf("datasource %s: database connection failed: %w", name, err)
+		}
+		
+		// Get connection config for defaults
+		connConfig, err := h.dbManager.ConnectionConfig(dbName)
+		if err != nil {
+			return nil, fmt.Errorf("datasource %s: failed to get connection config: %w", name, err)
+		}
+		
+		// Parse timeout
+		timeout := 30 * time.Second
+		if connConfig.Timeout != "" {
+			d, err := time.ParseDuration(connConfig.Timeout)
+			if err != nil {
+				log.Printf("Invalid timeout %q, using default 30s: %v", connConfig.Timeout, err)
+			} else {
+				timeout = d
+			}
+		}
+		
+		// Determine row limit
+		rowLimit := connConfig.RowLimit
+		if report.MaxRows > 0 && report.MaxRows < rowLimit {
+			rowLimit = report.MaxRows
+		}
+		
+		queryResult, err := h.dbManager.ExecuteDatasource(db, ds, params, report, rowLimit, timeout, report.ID, name, dbName)
 		if err != nil {
 			return nil, fmt.Errorf("datasource %s: %w", name, err)
 		}

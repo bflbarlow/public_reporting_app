@@ -24,6 +24,41 @@ immutable_params:
   - user_id           # User-level access control
 ```
 
+### 1.2 Database Configuration
+
+Reports can use a **single database** (via `report.database`) or **multiple databases** (via `datasources.{name}.database`):
+
+```yaml
+# Single-database report (simpler)
+id: simple_report
+database: default    # All datasources use this
+datasources:
+  summary:
+    sql: SELECT * FROM default_table   # uses report.database
+
+# Multi-database report (each datasource picks its DB)
+id: cross_db_report
+database: default    # fallback for datasources without a database field
+datasources:
+  customer_data:
+    database: customer_sql    # datasource-level override
+    sql: SELECT * FROM customers
+
+  program_data:
+    database: classicmodels   # another datasource uses a different DB
+    sql: SELECT * FROM products
+
+  fallback_report:
+    # No database field — uses report.database ("default") as fallback
+    sql: SELECT * FROM default_table
+```
+
+**Rules:**
+- `report.database` is **required** as the fallback for all datasources
+- `datasources.{name}.database` is **optional** — if omitted, the report-level database is used
+- At least one of `report.database` or a datasource-level `database` must be set for the report to be valid
+- Database names must exist in `databases.yaml` — validation errors are logged at startup
+
 **Implementation Checklist:**
 - [ ] **ALWAYS** include `organization_id` as immutable parameter
 - [ ] **ALWAYS** filter by `organization_id` in every SQL query
@@ -909,6 +944,7 @@ vim dashboard.html  # Update visualizations
   - Change `id` to match directory name
   - Update `name` and `description`
   - Modify `immutable_params` and `mutable_params`
+  - Add `database` to each datasource (optional — falls back to `report.database`)
   - Replace SQL queries with your actual queries
   - Adjust `row_limit` values
 
