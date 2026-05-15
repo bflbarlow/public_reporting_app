@@ -1,0 +1,3405 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Program Analysis Dashboard - Advanced Visualizations</title>
+    <script src="/static/thick_client.js"></script>
+
+    <!-- Load Chart.js from CDN (Change to your preferred visualization library) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES - STYLES.md PALETTE
+           ========================================================================== */
+        :root {
+            /* STYLES.md Primary Palette */
+            --color-dark-blue:   #33485e;
+            --color-primary-blue:#3a70a0;
+            --color-dark-teal:   #167e8e;
+            --color-green:       #3c763d;
+            --color-red:         #bc473a;
+            --color-dark-red:    #d14232;
+            --color-orange:      #ef840f;
+
+            /* Backgrounds */
+            --color-bg:          #f8f8f8;
+            --color-bg-alt:      #eaf4fb;
+            --color-bg-card:     #ffffff;
+            --color-bg-success:  #ebfceb;
+            --color-bg-danger:   #fceceb;
+            --color-bg-teal:     #e6fbfc;
+            --color-bg-warning:  #f9f2b4;
+
+            /* Text */
+            --color-text:        #444;
+            --color-text-light:  #666;
+            --color-text-white:  #ffffff;
+
+            /* Borders & Shadows */
+            --color-border:      rgba(0,0,0,0.08);
+            --color-shadow:      rgba(0,0,0,0.08);
+            --color-shadow-lg:   rgba(0,0,0,0.12);
+
+            /* Chart Colors (STYLES.md derived) */
+            --chart-1:           #3a70a0;   /* primary blue */
+            --chart-2:           #167e8e;   /* dark teal */
+            --chart-3:           #3c763d;   /* green */
+            --chart-4:           #ef840f;   /* orange */
+            --chart-5:           #bc473a;   /* red */
+            --chart-6:           #33485e;   /* dark blue */
+            --chart-7:           #23527c;   /* hover blue */
+            --chart-8:           #d14232;   /* dark red accent */
+
+            /* Header gradient: dark blue → dark teal */
+            --color-header-start:#33485e;
+            --color-header-end:  #167e8e;
+            --color-header-text: #ffffff;
+
+            --filter-container-bg: #ffffff;
+            --summary-card-bg:     #ffffff;
+            --badge-mutable-bg:    #eaf4fb;
+            --badge-mutable-fg:    #23727c;
+        }
+
+        body.dark-theme {
+            --color-dark-blue:   #74b9ff;
+            --color-primary-blue:#5dade2;
+            --color-dark-teal:   #48c9b0;
+            --color-green:       #55efc4;
+            --color-red:         #fd79a8;
+            --color-dark-red:    #e84393;
+            --color-orange:      #f5b041;
+
+            --color-bg:          #1a1d28;
+            --color-bg-alt:      #1e3a5f;
+            --color-bg-card:     #2d3436;
+            --color-bg-success:  #0a3d2a;
+            --color-bg-danger:   #4a1a1a;
+            --color-bg-teal:     #0a3d3e;
+            --color-bg-warning:  #3d3520;
+
+            --color-text:        #e0e0e0;
+            --color-text-light:  #b0b0b0;
+            --color-text-white:  #ffffff;
+
+            --color-border:      rgba(255,255,255,0.08);
+            --color-shadow:      rgba(0,0,0,0.3);
+            --color-shadow-lg:   rgba(0,0,0,0.5);
+
+            --chart-1:           #74b9ff;
+            --chart-2:           #55efc4;
+            --chart-3:           #a3e4d7;
+            --chart-4:           #f5b041;
+            --chart-5:           #fd79a8;
+            --chart-6:           #d2b4de;
+            --chart-7:           #a9cce3;
+            --chart-8:           #e84393;
+
+            --color-header-start:#0a1628;
+            --color-header-end:  #0e2f44;
+            --color-header-text: #ffffff;
+
+            --filter-container-bg: #2d3436;
+            --summary-card-bg:     #2d3436;
+            --badge-mutable-bg:    #1e3a5f;
+            --badge-mutable-fg:    #74b9ff;
+        }
+
+        /* ==========================================================================
+           BASE STYLES
+           ========================================================================== */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            color: var(--color-text);
+            background-color: var(--color-bg);
+            padding: 20px;
+            transition: background-color 0.4s ease, color 0.4s ease;
+        }
+
+        body.loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        /* ==========================================================================
+           LAYOUT & CONTAINERS
+           ========================================================================== */
+        .dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* ---- HEADER ---- */
+        .header {
+            background: linear-gradient(135deg, var(--color-header-start) 0%, var(--color-header-end) 100%);
+            color: var(--color-header-text);
+            border-radius: 12px;
+            padding: 24px 32px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 14px var(--color-shadow-lg);
+            position: relative;
+            overflow: hidden;
+            border-bottom: 4px solid var(--color-green);
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 40%;
+            height: 100%;
+            background: linear-gradient(135deg, transparent 0%, rgba(255,255,255,0.04) 100%);
+            pointer-events: none;
+        }
+
+        .header h1 {
+            color: var(--color-header-text);
+            margin-bottom: 4px;
+            font-size: 28px;
+            font-weight: 700;
+            position: relative;
+            z-index: 2;
+            letter-spacing: -0.5px;
+        }
+
+        .header p {
+            color: rgba(255, 255, 255, 0.85);
+            margin-bottom: 4px;
+            font-size: 15px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .report-id {
+            font-family: monospace;
+            background: rgba(255, 255, 255, 0.15);
+            padding: 3px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            color: rgba(255,255,255,0.95);
+            position: relative;
+            z-index: 2;
+            display: inline-block;
+            border: 1px solid rgba(255,255,255,0.15);
+        }
+
+        /* ==========================================================================
+           FILTER CONTROLS
+           ========================================================================== */
+        /* ---- FILTERS ---- */
+        .filters-container {
+            background: var(--filter-container-bg);
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px var(--color-shadow);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: flex-end;
+            border: 1px solid var(--color-card-border);
+            border-left: 4px solid var(--color-dark-teal);
+            transition: all 0.3s ease;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-width: 180px;
+        }
+
+        .filter-group label {
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--color-dark-blue);
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .filter-group .param-type {
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 8px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        .immutable-badge {
+            background: var(--color-bg-warning);
+            color: #b76e00;
+        }
+
+        .mutable-badge {
+            background: var(--badge-mutable-bg);
+            color: var(--badge-mutable-fg);
+        }
+
+        .filter-group input,
+        .filter-group select {
+            padding: 9px 12px;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            font-size: 14px;
+            transition: all 0.2s;
+            background: var(--color-bg-card);
+            color: var(--color-text);
+        }
+
+        /* Enhanced multi-select dropdown */
+        .filter-group select[multiple] {
+            height: auto;
+            min-height: 120px;
+            max-height: 160px;
+            padding: 10px;
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            background: linear-gradient(to bottom, var(--color-bg-card) 0%, var(--color-bg-alt) 100%);
+            color: var(--color-text);
+            font-size: 14px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .filter-group select[multiple]:hover {
+            border-color: var(--color-primary-blue);
+            box-shadow: 0 2px 8px rgba(58, 112, 160, 0.1);
+        }
+
+        .filter-group select[multiple]:focus {
+            border-color: var(--color-primary-blue);
+            box-shadow: 0 0 0 3px rgba(58, 112, 160, 0.15);
+            transform: translateY(-1px);
+        }
+
+        .filter-group select[multiple] option {
+            padding: 8px 10px;
+            border-radius: 6px;
+            margin: 4px 0;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .filter-group select[multiple] option:hover {
+            background: var(--color-bg-alt);
+        }
+
+        .filter-group select[multiple] option:checked {
+            background: linear-gradient(135deg, var(--color-primary-blue) 0%, var(--color-dark-teal) 100%);
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .filter-group select[multiple] option:checked:hover {
+            background: linear-gradient(135deg, var(--color-dark-blue) 0%, var(--color-primary-blue) 100%);
+        }
+
+        /* Custom scrollbar for multi-select */
+        .filter-group select[multiple]::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .filter-group select[multiple]::-webkit-scrollbar-track {
+            background: var(--color-bg-alt);
+            border-radius: 4px;
+        }
+
+        .filter-group select[multiple]::-webkit-scrollbar-thumb {
+            background: var(--color-primary-blue);
+            border-radius: 4px;
+        }
+        
+        .filter-group select[multiple]::-webkit-scrollbar-thumb:hover {
+            background: var(--color-dark-teal);
+        }
+        
+        /* Custom multiselect dropdown */
+        .custom-multiselect {
+            position: relative;
+            font-family: inherit;
+        }
+        
+        .multiselect-header {
+            padding: 9px 12px;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            background: var(--color-bg-card);
+            color: var(--color-text);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s ease;
+            font-size: 14px;
+        }
+        
+        .multiselect-header:hover {
+            border-color: var(--color-primary-blue);
+            box-shadow: 0 2px 8px rgba(58, 112, 160, 0.1);
+        }
+        
+        .multiselect-header.active {
+            border-color: var(--color-primary-blue);
+            box-shadow: 0 0 0 3px rgba(58, 112, 160, 0.15);
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+        
+        .multiselect-header.has-selection {
+            border-color: var(--color-dark-teal);
+            background: linear-gradient(to right, var(--color-bg-card) 0%, var(--color-bg-teal) 100%);
+        }
+        
+        .multiselect-header.has-selection:hover {
+            border-color: var(--color-primary-blue);
+        }
+        
+        .multiselect-placeholder {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+        }
+        
+        .multiselect-arrow {
+            font-size: 10px;
+            transition: transform 0.2s ease;
+            margin-left: 8px;
+            color: var(--color-text-light);
+        }
+        
+        .multiselect-header.active .multiselect-arrow {
+            transform: rotate(180deg);
+        }
+        
+        .multiselect-dropdown {
+            position: absolute;
+            top: calc(100% - 2px);
+            left: 0;
+            right: 0;
+            background: var(--color-bg-card);
+            border: 1px solid var(--color-primary-blue);
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            box-shadow: 0 4px 12px var(--color-shadow);
+            z-index: 1000;
+            opacity: 0;
+            transform: translateY(-10px);
+            visibility: hidden;
+            max-height: 300px;
+            overflow-y: auto;
+            transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+        }
+        
+        .multiselect-header.active + .multiselect-dropdown {
+            opacity: 1;
+            transform: translateY(0);
+            visibility: visible;
+        }
+        
+        .multiselect-search {
+            padding: 8px;
+            border-bottom: 1px solid var(--color-border);
+        }
+        
+        .multiselect-search-input {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            font-size: 13px;
+            background: var(--color-bg-card);
+            color: var(--color-text);
+        }
+        
+        .multiselect-search-input:focus {
+            outline: none;
+            border-color: var(--color-primary-blue);
+        }
+        
+        .multiselect-options {
+            padding: 8px 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .multiselect-option {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        
+        .multiselect-option:hover {
+            background: var(--color-bg-alt);
+        }
+        
+        .multiselect-option input[type="checkbox"] {
+            margin-right: 8px;
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+        
+        .multiselect-option span {
+            font-size: 13px;
+            color: var(--color-text);
+            flex: 1;
+        }
+        
+        .multiselect-actions {
+            padding: 8px;
+            border-top: 1px solid var(--color-border);
+            display: flex;
+            gap: 8px;
+        }
+        
+        .multiselect-action-btn {
+            flex: 1;
+            padding: 6px 12px;
+            border: 1px solid var(--color-primary-blue);
+            background: transparent;
+            color: var(--color-primary-blue);
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .multiselect-action-btn:hover {
+            background: var(--color-primary-blue);
+            color: white;
+        }
+        
+        /* Custom scrollbar for multiselect dropdown */
+        .multiselect-dropdown::-webkit-scrollbar,
+        .multiselect-options::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .multiselect-dropdown::-webkit-scrollbar-track,
+        .multiselect-options::-webkit-scrollbar-track {
+            background: var(--color-bg-alt);
+            border-radius: 3px;
+        }
+        
+        .multiselect-dropdown::-webkit-scrollbar-thumb,
+        .multiselect-options::-webkit-scrollbar-thumb {
+            background: var(--color-primary-blue);
+            border-radius: 3px;
+        }
+        
+        .multiselect-dropdown::-webkit-scrollbar-thumb:hover,
+        .multiselect-options::-webkit-scrollbar-thumb:hover {
+            background: var(--color-dark-teal);
+        }
+        
+        
+
+        .filter-group input:focus,
+        .filter-group select:focus {
+            outline: none;
+            border-color: var(--color-primary-blue);
+            box-shadow: 0 0 0 3px rgba(58, 112, 160, 0.12);
+        }
+
+        .filter-actions {
+            display: flex;
+            gap: 10px;
+            margin-left: auto;
+            padding-bottom: 1px;
+        }
+
+        .btn {
+            padding: 9px 18px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: var(--color-primary-blue);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: var(--color-dark-blue);
+            transform: translateY(-1px);
+            box-shadow: 0 3px 8px var(--color-shadow);
+        }
+
+        .btn-secondary {
+            background: var(--color-bg-alt);
+            color: var(--color-primary-blue);
+            border: 1px solid var(--color-primary-blue);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: var(--color-primary-blue);
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        /* ==========================================================================
+           DATA SUMMARY CARDS - Horizontal Command Strip
+           ========================================================================== */
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .summary-card {
+            background: var(--summary-card-bg);
+            border-radius: 10px;
+            padding: 20px 24px;
+            box-shadow: 0 2px 8px var(--color-shadow);
+            text-align: left;
+            transition: all 0.3s ease;
+            border: 1px solid var(--color-card-border);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Left accent bar per card */
+        .summary-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+        }
+
+        .summary-card.accent-blue::before   { background: var(--color-primary-blue); }
+        .summary-card.accent-teal::before   { background: var(--color-dark-teal); }
+        .summary-card.accent-green::before  { background: var(--color-green); }
+        .summary-card.accent-orange::before { background: var(--color-orange); }
+
+        .summary-card.accent-blue   { background: linear-gradient(135deg, var(--summary-card-bg) 0%, var(--color-bg-alt) 100%); }
+        .summary-card.accent-teal   { background: linear-gradient(135deg, var(--summary-card-bg) 0%, var(--color-bg-teal) 100%); }
+        .summary-card.accent-green  { background: linear-gradient(135deg, var(--summary-card-bg) 0%, var(--color-bg-success) 100%); }
+        .summary-card.accent-orange { background: linear-gradient(135deg, var(--summary-card-bg) 0%, var(--color-bg-warning) 100%); }
+
+        .summary-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--color-dark-blue);
+            margin-bottom: 4px;
+            line-height: 1.1;
+        }
+
+        .summary-value.accent-blue   { color: var(--color-primary-blue); }
+        .summary-value.accent-teal   { color: var(--color-dark-teal); }
+        .summary-value.accent-green  { color: var(--color-green); }
+        .summary-value.accent-orange { color: var(--color-orange); }
+
+        .summary-progress {
+            height: 5px;
+            background: var(--color-border);
+            border-radius: 3px;
+            margin: 10px 0 6px 0;
+            overflow: hidden;
+        }
+
+        .summary-progress-bar {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 1.5s ease-out;
+        }
+
+        .summary-card.accent-blue .summary-progress-bar   { background: var(--color-primary-blue); }
+        .summary-card.accent-teal .summary-progress-bar   { background: var(--color-dark-teal); }
+        .summary-card.accent-green .summary-progress-bar  { background: var(--color-green); }
+        .summary-card.accent-orange .summary-progress-bar { background: var(--color-orange); }
+
+        .summary-label {
+            font-size: 12px;
+            color: var(--color-text-light);
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            font-weight: 600;
+        }
+
+        /* ==========================================================================
+           VISUALIZATION CONTAINERS - Asymmetric Layout
+           ========================================================================== */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        /* Row 1: two smaller charts */
+        .chart-card.wide { grid-column: span 12; }
+        .chart-card.half { grid-column: span 6; }
+
+        .chart-card {
+            background: var(--color-bg-card);
+            border-radius: 10px;
+            padding: 20px 24px 16px 24px;
+            box-shadow: 0 2px 8px var(--color-shadow);
+            display: flex;
+            flex-direction: column;
+            border: 1px solid var(--color-card-border);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Top accent line per chart type */
+        .chart-card.type-radar::before    { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--color-primary-blue); }
+        .chart-card.type-polar::before    { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--color-dark-teal); }
+        .chart-card.type-line::before     { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--color-green); }
+        .chart-card.type-stacked::before  { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--color-orange); }
+
+        .chart-header {
+            margin-bottom: 12px;
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+        }
+
+        .chart-title {
+            font-weight: 700;
+            color: var(--color-dark-blue);
+            font-size: 17px;
+            margin-bottom: 0;
+        }
+
+        .chart-badge {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .chart-badge.blue   { background: var(--color-bg-alt); color: var(--color-primary-blue); }
+        .chart-badge.teal   { background: var(--color-bg-teal); color: var(--color-dark-teal); }
+        .chart-badge.green  { background: var(--color-bg-success); color: var(--color-green); }
+        .chart-badge.orange { background: var(--color-bg-warning); color: var(--color-orange); }
+
+        .chart-description {
+            color: var(--color-text-light);
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .chart-container {
+            flex: 1;
+            position: relative;
+            min-height: 0; /* Important for flex children */
+        }
+
+        .chart-wrapper {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        canvas {
+            width: 100% !important;
+            height: 100% !important;
+            display: block;
+        }
+
+        /* ==========================================================================
+           DATA TABLE
+           ========================================================================== */
+        .data-table-container {
+            background: var(--color-bg-card);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 8px var(--color-shadow);
+            margin-bottom: 20px;
+            overflow-x: auto;
+            border: 1px solid var(--color-card-border);
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .data-table th {
+            background: var(--color-bg-alt);
+            padding: 12px 14px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--color-dark-blue);
+            border-bottom: 2px solid var(--color-primary-blue);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .data-table td {
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--color-border);
+            color: var(--color-text);
+        }
+
+        .data-table tr:hover td {
+            background: var(--color-bg-alt);
+        }
+
+        /* ==========================================================================
+           LOADING & SKELETON STATES
+           ========================================================================== */
+        .skeleton {
+            background: linear-gradient(90deg, #e8e8e8 25%, #d8d8d8 50%, #e8e8e8 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 6px;
+        }
+
+        .skeleton-card {
+            height: 100px;
+        }
+
+        /* Skeleton accent bars */
+        .skeleton-card[data-accent="blue"]::before   { background: var(--color-primary-blue); }
+        .skeleton-card[data-accent="teal"]::before    { background: var(--color-dark-teal); }
+        .skeleton-card[data-accent="green"]::before   { background: var(--color-green); }
+        .skeleton-card[data-accent="orange"]::before  { background: var(--color-orange); }
+
+        .skeleton-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+        }
+
+        .skeleton-chart {
+            height: 350px;
+        }
+
+        .skeleton-row {
+            height: 36px;
+            margin-bottom: 8px;
+        }
+
+        @keyframes shimmer {
+            from { background-position: -200% 0; }
+            to { background-position: 200% 0; }
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(248,248,248,0.92);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+            backdrop-filter: blur(4px);
+        }
+
+        body.dark-theme .loading-overlay {
+            background: rgba(26,29,40,0.92);
+        }
+
+        .loading-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .spinner {
+            border: 4px solid rgba(22,126,142,0.15);
+            border-top: 4px solid var(--color-dark-teal);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* ==========================================================================
+           ERROR STATES
+           ========================================================================== */
+        .error-message {
+            background: var(--color-bg-danger);
+            border-left: 5px solid var(--color-red);
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        .error-title {
+            font-weight: 700;
+            color: var(--color-red);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .error-details {
+            color: var(--color-text-light);
+            font-size: 13px;
+            font-family: monospace;
+            background: var(--color-bg-card);
+            padding: 10px 14px;
+            border-radius: 6px;
+            margin-top: 10px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+            border: 1px solid var(--color-border);
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ==========================================================================
+           NO DATA STATE
+           ========================================================================== */
+        .no-data {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--color-text-light);
+            text-align: center;
+        }
+
+        .no-data-icon {
+            font-size: 40px;
+            margin-bottom: 12px;
+            opacity: 0.4;
+        }
+
+        .no-data p {
+            font-size: 14px;
+            color: var(--color-text-light);
+        }
+
+        /* ==========================================================================
+           ANIMATIONS
+           ========================================================================== */
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(22, 126, 142, 0.6); }
+            70% { box-shadow: 0 0 0 10px rgba(22, 126, 142, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(22, 126, 142, 0); }
+        }
+
+        .btn-pulse {
+            animation: pulse 1.5s infinite;
+        }
+
+        /* ==========================================================================
+           RESPONSIVE DESIGN
+           ========================================================================== */
+        @media (max-width: 1024px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            .chart-card.half, .chart-card.wide {
+                grid-column: span 1;
+            }
+            .chart-card {
+                min-height: 320px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .summary-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .filters-container {
+                flex-direction: column;
+            }
+            .filter-group {
+                min-width: 100%;
+            }
+            .filter-actions {
+                margin-left: 0;
+                width: 100%;
+                justify-content: stretch;
+            }
+            .btn {
+                flex: 1;
+                justify-content: center;
+            }
+            /* Multi-select on mobile */
+            .filter-group select[multiple] {
+                max-height: 140px;
+                min-height: 100px;
+                font-size: 13px;
+            }
+            .filter-group select[multiple] option {
+                padding: 6px 8px;
+                font-size: 12px;
+            }
+            /* Custom multiselect on mobile */
+            .custom-multiselect {
+                font-size: 13px;
+            }
+            .multiselect-dropdown {
+                max-height: 250px;
+            }
+            .multiselect-options {
+                max-height: 180px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .summary-cards {
+                grid-template-columns: 1fr;
+            }
+            body {
+                padding: 12px;
+            }
+            .header {
+                padding: 18px 20px;
+            }
+            .header h1 {
+                font-size: 22px;
+            }
+            /* Multi-select on very small screens */
+            .filter-group select[multiple] {
+                max-height: 120px;
+                min-height: 80px;
+                font-size: 12px;
+            }
+            .filter-group select[multiple] option {
+                padding: 5px 6px;
+                font-size: 11px;
+            }
+            /* Custom multiselect on very small screens */
+            .custom-multiselect {
+                font-size: 12px;
+            }
+            .multiselect-header {
+                padding: 7px 10px;
+            }
+            .multiselect-dropdown {
+                max-height: 220px;
+            }
+            .multiselect-options {
+                max-height: 160px;
+            }
+            .multiselect-option {
+                padding: 6px 8px;
+                font-size: 11px;
+            }
+            .multiselect-action-btn {
+                padding: 4px 8px;
+                font-size: 11px;
+            }
+        }
+
+        /* ==========================================================================
+           DEBUG PANEL (Development Only)
+           ========================================================================== */
+        .debug-panel {
+            background: var(--color-bg-card);
+            color: var(--color-text);
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 40px;
+            font-family: monospace;
+            font-size: 13px;
+            display: none;
+            border: 1px solid var(--color-border);
+            box-shadow: 0 2px 8px var(--color-shadow);
+        }
+
+        .debug-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--color-dark-blue);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            z-index: 1000;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px var(--color-shadow-lg);
+            transition: all 0.2s;
+        }
+
+        .debug-toggle:hover {
+            background: var(--color-primary-blue);
+            transform: scale(1.1);
+        }
+
+        .debug-section {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #4a4a4a;
+        }
+
+        .debug-section-title {
+            color: var(--color-primary-blue);
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .debug-item {
+            margin-bottom: 6px;
+            word-break: break-all;
+        }
+
+        .debug-label {
+            color: var(--color-dark-teal);
+            display: inline-block;
+            min-width: 180px;
+        }
+
+        /* ==========================================================================
+           PRINT STYLES
+           ========================================================================== */
+        @media print {
+            .filters-container,
+            .debug-panel,
+            .debug-toggle,
+            #theme-toggle,
+            #print-dashboard,
+            #last-updated {
+                display: none !important;
+            }
+
+            body {
+                background: white !important;
+                color: #222 !important;
+                padding: 0 !important;
+                font-size: 11pt !important;
+            }
+
+            .dashboard {
+                max-width: none !important;
+                margin: 0 !important;
+            }
+
+            .header {
+                background: white !important;
+                color: #33485e !important;
+                border-radius: 0 !important;
+                padding: 16px 0 !important;
+                margin-bottom: 16px !important;
+                box-shadow: none !important;
+                border-bottom: 3px solid #167e8e !important;
+                border-left: none !important;
+            }
+
+            .header h1 {
+                color: #33485e !important;
+                font-size: 22pt !important;
+                text-shadow: none !important;
+            }
+
+            .header p {
+                color: #666 !important;
+            }
+
+            .report-id {
+                background: #f0f0f0 !important;
+                color: #3a70a0 !important;
+            }
+
+            .charts-grid {
+                grid-template-columns: 1fr !important;
+                gap: 16px !important;
+                margin-bottom: 16px !important;
+            }
+
+            .chart-card {
+                height: auto !important;
+                min-height: 300px !important;
+                page-break-inside: avoid;
+                break-inside: avoid;
+                border: 1px solid #ccc !important;
+                box-shadow: none !important;
+                padding: 16px !important;
+                margin-bottom: 16px !important;
+            }
+
+            .chart-container {
+                min-height: 280px !important;
+            }
+
+            .summary-cards {
+                margin-bottom: 16px !important;
+            }
+
+            .summary-card {
+                box-shadow: none !important;
+                border: 1px solid #ccc !important;
+                padding: 12px !important;
+            }
+
+            .summary-value,
+            .chart-title,
+            .chart-description,
+            .summary-label,
+            .filter-group label,
+            .data-table th,
+            .data-table td {
+                color: #222 !important;
+            }
+
+            .header::before {
+                content: "Program Analysis Dashboard - Generated " attr(data-print-date);
+                display: block;
+                font-size: 9pt;
+                color: #666;
+                text-align: right;
+                margin-top: 8px;
+                border-top: 1px solid #ddd;
+                padding-top: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div style="text-align: center;">
+            <div class="spinner"></div>
+            <p style="color: var(--color-dark-blue); font-weight: 600; font-size: 16px;">Loading report data...</p>
+            <p style="color: var(--color-text-light); font-size: 13px; margin-top: 6px;">Fetching data via thick client</p>
+        </div>
+    </div>
+
+    <!-- Error Message Container -->
+    <div id="error-message" class="error-message">
+        <div class="error-title">⚠️ Error Loading Data</div>
+        <div id="error-details" class="error-details"></div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div class="dashboard">
+        <!-- Header -->
+        <div class="header">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; position: relative; z-index: 2;">
+                <div>
+                    <h1 id="report-title">Program Analysis Dashboard</h1>
+                    <p id="report-description">Advanced Chart.js visualizations of program performance and referral patterns</p>
+                    <p>Report ID: <span id="report-id" class="report-id">program_analysis</span></p>
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+                    <div style="display: flex; gap: 8px;">
+                        <div id="theme-toggle" style="cursor: pointer; background: rgba(255,255,255,0.12); padding: 7px 14px; border-radius: 8px; display: flex; align-items: center; gap: 6px; color: rgba(255,255,255,0.95); font-weight: 600; border: 1px solid rgba(255,255,255,0.15); transition: all 0.3s; font-size: 13px;">
+                            <span id="theme-icon">🌙</span>
+                            <span id="theme-text">Dark</span>
+                        </div>
+                        <div id="print-dashboard" style="cursor: pointer; background: rgba(255,255,255,0.12); padding: 7px 14px; border-radius: 8px; display: flex; align-items: center; gap: 6px; color: rgba(255,255,255,0.95); font-weight: 600; border: 1px solid rgba(255,255,255,0.15); transition: all 0.3s; font-size: 13px;">
+                            <span style="font-size: 14px;">🖨️</span>
+                            <span>Export</span>
+                        </div>
+                    </div>
+                    <div id="last-updated" style="font-size: 12px; color: rgba(255,255,255,0.8); background: rgba(0,0,0,0.2); padding: 4px 12px; border-radius: 12px;">
+                        Last updated: <span id="update-time">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Controls -->
+        <div class="filters-container">
+            <div class="filter-group">
+                <label for="start-date">Start Date <span class="param-type mutable-badge">Mutable</span></label>
+                <input type="date" id="start-date">
+            </div>
+
+            <div class="filter-group">
+                <label for="end-date">End Date <span class="param-type mutable-badge">Mutable</span></label>
+                <input type="date" id="end-date">
+            </div>
+
+            <div class="filter-group">
+                <label for="status-filter">Status <span class="param-type mutable-badge">Mutable</span></label>
+                <div class="custom-multiselect" id="custom-status-filter">
+                    <div class="multiselect-header" id="status-filter-header">
+                        <span class="multiselect-placeholder">All Statuses</span>
+                        <span class="multiselect-arrow">▼</span>
+                    </div>
+                    <div class="multiselect-dropdown" id="status-filter-dropdown">
+                        <div class="multiselect-search" style="display: none;">
+                            <input type="text" placeholder="Search statuses..." class="multiselect-search-input">
+                        </div>
+                        <div class="multiselect-options">
+                            <label class="multiselect-option">
+                                <input type="checkbox" value="Submitted">
+                                <span>Submitted</span>
+                            </label>
+                            <label class="multiselect-option">
+                                <input type="checkbox" value="In Review">
+                                <span>In Review</span>
+                            </label>
+                            <label class="multiselect-option">
+                                <input type="checkbox" value="Completed">
+                                <span>Completed</span>
+                            </label>
+                            <label class="multiselect-option">
+                                <input type="checkbox" value="accepted">
+                                <span>Accepted</span>
+                            </label>
+                            <label class="multiselect-option">
+                                <input type="checkbox" value="cancelled">
+                                <span>Cancelled</span>
+                            </label>
+                            <label class="multiselect-option">
+                                <input type="checkbox" value="closed">
+                                <span>Closed</span>
+                            </label>
+                            <label class="multiselect-option">
+                                <input type="checkbox" value="in-progress">
+                                <span>In Progress</span>
+                            </label>
+                            <label class="multiselect-option">
+                                <input type="checkbox" value="on-hold">
+                                <span>On Hold</span>
+                            </label>
+                            <label class="multiselect-option">
+                                <input type="checkbox" value="pending">
+                                <span>Pending</span>
+                            </label>
+                            <label class="multiselect-option">
+                                <input type="checkbox" value="rescinded">
+                                <span>Rescinded</span>
+                            </label>
+                        </div>
+                        <div class="multiselect-actions">
+                            <button type="button" class="multiselect-action-btn" id="select-all-statuses">Select All</button>
+                            <button type="button" class="multiselect-action-btn" id="clear-all-statuses">Clear All</button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Hidden select for compatibility with existing JavaScript -->
+                <select id="status-filter" multiple style="display: none;">
+                    <option value="Submitted">Submitted</option>
+                    <option value="In Review">In Review</option>
+                    <option value="Completed">Completed</option>
+                    <option value="accepted">Accepted</option>
+                    <option value="cancelled">Cancelled</option>
+                    <option value="closed">Closed</option>
+                    <option value="in-progress">In Progress</option>
+                    <option value="on-hold">On Hold</option>
+                    <option value="pending">Pending</option>
+                    <option value="rescinded">Rescinded</option>
+                </select>
+
+            </div>
+
+            <div class="filter-group">
+                <label for="category-filter">Category <span class="param-type mutable-badge">Mutable</span></label>
+                <select id="category-filter">
+                    <option value="">All Categories</option>
+                    <option value="food">Food</option>
+                    <option value="housing">Housing</option>
+                    <option value="employment">Employment</option>
+                    <option value="health">Health</option>
+                    <option value="mental-health">Mental Health</option>
+                    <option value="substance-abuse">Substance Abuse</option>
+                    <option value="legal">Legal</option>
+                    <option value="transportation">Transportation</option>
+                    <option value="elderly-services">Elderly Services</option>
+                    <option value="childcare">Childcare</option>
+                    <option value="disability-services">Disability Services</option>
+                    <option value="immigrant-services">Immigrant Services</option>
+                    <option value="crisis-intervention">Crisis Intervention</option>
+                    <option value="debt-relief">Debt Relief</option>
+                    <option value="utility-assistance">Utility Assistance</option>
+                </select>
+            </div>
+
+            <div class="filter-actions">
+                <button id="apply-filters" class="btn btn-primary">Apply</button>
+                <button id="reset-filters" class="btn btn-secondary">Reset</button>
+            </div>
+        </div>
+
+        <!-- Summary Cards (Skeleton Loaders Initially) -->
+        <div class="summary-cards" id="summary-cards">
+            <div class="summary-card skeleton skeleton-card" data-accent="blue"></div>
+            <div class="summary-card skeleton skeleton-card" data-accent="teal"></div>
+            <div class="summary-card skeleton skeleton-card" data-accent="green"></div>
+            <div class="summary-card skeleton skeleton-card" data-accent="orange"></div>
+        </div>
+
+        <!-- Charts Grid - Asymmetric Layout -->
+        <div class="charts-grid" id="charts-grid">
+            <!-- Row 1: Two half-width charts side by side -->
+            <!-- Chart 1: Radar Chart -->
+            <div class="chart-card half type-radar">
+                <div class="chart-header">
+                    <span class="chart-badge blue">Analysis</span>
+                    <div class="chart-title">Program Performance Radar</div>
+                </div>
+                <div class="chart-description">Multi-dimensional metrics across program categories</div>
+                <div class="chart-container" style="height:340px">
+                    <canvas id="radar-chart"></canvas>
+                    <div id="radar-no-data" class="no-data" style="display: none;">
+                        <div class="no-data-icon">📊</div>
+                        <p>No radar data available</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart 2: Polar Area Chart -->
+            <div class="chart-card half type-polar">
+                <div class="chart-header">
+                    <span class="chart-badge teal">Distribution</span>
+                    <div class="chart-title">Referral Status Distribution</div>
+                </div>
+                <div class="chart-description">Proportional breakdown of referral statuses</div>
+                <div class="chart-container" style="height:340px">
+                    <canvas id="polar-area-chart"></canvas>
+                    <div id="polar-no-data" class="no-data" style="display: none;">
+                        <div class="no-data-icon">📈</div>
+                        <p>No status data available</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 2: Full-width Line Chart -->
+            <!-- Chart 3: Line Chart with Multiple Datasets -->
+            <div class="chart-card wide type-line">
+                <div class="chart-header">
+                    <span class="chart-badge green">Trends</span>
+                    <div class="chart-title">Referral Trends Over Time</div>
+                </div>
+                <div class="chart-description">Total, completed, submitted, in-review referrals and unique seekers tracked daily</div>
+                <div class="chart-container" style="height:400px">
+                    <canvas id="line-datasets-chart"></canvas>
+                    <div id="line-datasets-no-data" class="no-data" style="display: none;">
+                        <div class="no-data-icon">📉</div>
+                        <p>No time series data available</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 3: Full-width Stacked Line Chart -->
+            <!-- Chart 4: Stacked Line Chart -->
+            <div class="chart-card wide type-stacked">
+                <div class="chart-header">
+                    <span class="chart-badge orange">Categories</span>
+                    <div class="chart-title">Referrals by Category Over Time</div>
+                </div>
+                <div class="chart-description">Cumulative daily referral volume by program category</div>
+                <div class="chart-container" style="height:380px">
+                    <canvas id="stacked-line-chart"></canvas>
+                    <div id="stacked-line-no-data" class="no-data" style="display: none;">
+                        <div class="no-data-icon">📈</div>
+                        <p>No category data available</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="data-table-container" style="display:none">
+            <h3 style="margin-bottom: 20px; color: #2c3e50;">Top Items Table</h3>
+            <div id="table-container">
+                <table class="data-table" id="data-table">
+                    <thead>
+                        <tr>
+                            <th>Item Name</th>
+                            <th>Item ID</th>
+                            <th>Transactions</th>
+                            <th>Revenue</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        <!-- Data will be populated by JavaScript -->
+                    </tbody>
+                </table>
+                <div id="table-no-data" class="no-data" style="display: none; height: 200px;">
+                    <div class="no-data-icon">📋</div>
+                    <p>No table data available</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Debug Panel (Hidden by default, enable for development) -->
+        <button id="debug-toggle" class="debug-toggle">🔧</button>
+        <div id="debug-panel" class="debug-panel">
+            <div class="debug-section">
+                <div class="debug-section-title">Report Configuration</div>
+                <div class="debug-item"><span class="debug-label">Report ID:</span> <span id="debug-report-id">-</span></div>
+                <div class="debug-item"><span class="debug-label">Report Name:</span> <span id="debug-report-name">-</span></div>
+                <div class="debug-item"><span class="debug-label">Current Parameters:</span> <span id="debug-params">-</span></div>
+            </div>
+            <div class="debug-section">
+                <div class="debug-section-title">Thick Client Status</div>
+                <div class="debug-item"><span class="debug-label">Available:</span> <span id="debug-thick-client-available">-</span></div>
+                <div class="debug-item"><span class="debug-label">Ready:</span> <span id="debug-thick-client-ready">-</span></div>
+                <div class="debug-item"><span class="debug-label">Last Refresh:</span> <span id="debug-last-refresh">-</span></div>
+            </div>
+            <div class="debug-section">
+                <div class="debug-section-title">Datasources</div>
+                <div class="debug-item"><span class="debug-label">Loaded Count:</span> <span id="debug-datasource-count">-</span></div>
+                <div class="debug-item"><span class="debug-label">Available:</span> <span id="debug-datasource-list">-</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===========================================================================
+        // REPORT TEMPLATE - JavaScript Implementation
+        // ===========================================================================
+        // This template demonstrates proper thick client usage with best practices.
+        // Modify the visualization code for your specific report needs.
+        // ===========================================================================
+
+        'use strict';
+
+        // Global state management
+        const ReportState = {
+            // Configuration from server
+            config: null,
+
+            // Current filter values
+            filters: {
+                start_date: '',
+                end_date: '',
+                status_filter: '',
+                category_filter: ''
+            },
+
+            // Chart instances
+            charts: {
+                radar: null,
+                polarArea: null,
+                lineDatasets: null,
+                stackedLine: null
+            },
+
+            // Data cache
+            data: null,
+
+            // Debug mode
+            debugMode: false,
+
+            // Initialize state
+            init() {
+                console.log('📊 Report Template Initializing...');
+
+                // Parse configuration from server injection
+                this.parseConfig();
+
+                // Setup debug panel
+                this.setupDebugPanel();
+
+                // Update UI with config values
+                this.updateUIFromConfig();
+
+                // Log initialization
+                this.debugLog('State initialized', {
+                    reportId: this.config?.reportId,
+                    paramCount: Object.keys(this.filters).length
+                });
+            },
+
+            // Parse window.ReportConfig (injected by server)
+            parseConfig() {
+                if (!window.ReportConfig) {
+                    console.error('❌ window.ReportConfig not found. Ensure you are accessing via /api/embed');
+                    this.showFatalError('Report configuration not found. Access via reporting app URL.');
+                    return;
+                }
+
+                this.config = window.ReportConfig;
+
+                // Parse parameters (they are stored as JSON string)
+                if (this.config.params) {
+                    try {
+                        const parsedParams = JSON.parse(this.config.params);
+                        this.filters = { ...this.filters, ...parsedParams };
+                        // Remove organization_id as it's managed by thick client
+                        delete this.filters.organization_id;
+                    } catch (e) {
+                        console.error('Failed to parse params JSON:', e);
+                    }
+                }
+
+                this.debugLog('Config parsed', {
+                    reportId: this.config.reportId,
+                    params: this.filters
+                });
+            },
+
+            // Update UI elements from configuration
+            updateUIFromConfig() {
+                // Update page title and header
+                if (this.config.reportName) {
+                    document.getElementById('report-title').textContent = this.config.reportName;
+                    document.title = this.config.reportName + ' - Dashboard';
+                }
+
+                if (this.config.reportId) {
+                    document.getElementById('report-id').textContent = this.config.reportId;
+                }
+
+                // Update filter inputs
+                if (this.filters.start_date) {
+                    const startVal = Array.isArray(this.filters.start_date) ? this.filters.start_date[0] : this.filters.start_date;
+                    document.getElementById('start-date').value = startVal;
+                }
+
+                if (this.filters.end_date) {
+                    const endVal = Array.isArray(this.filters.end_date) ? this.filters.end_date[0] : this.filters.end_date;
+                    document.getElementById('end-date').value = endVal;
+                }
+
+                if (this.filters.status_filter) {
+                    const statusSelect = document.getElementById('status-filter');
+                    if (Array.isArray(this.filters.status_filter)) {
+                        // For multi-select, select each value
+                        Array.from(statusSelect.options).forEach(option => {
+                            option.selected = this.filters.status_filter.includes(option.value);
+                        });
+                    } else if (this.filters.status_filter) {
+                        // Single value (backward compatibility)
+                        statusSelect.value = this.filters.status_filter;
+                    }
+                    
+                    // Also update custom multiselect checkboxes if they exist
+                    const customMultiselect = document.getElementById('custom-status-filter');
+                    if (customMultiselect) {
+                        const checkboxes = customMultiselect.querySelectorAll('input[type="checkbox"]');
+                        checkboxes.forEach(checkbox => {
+                            const isSelected = Array.isArray(this.filters.status_filter) ? 
+                                this.filters.status_filter.includes(checkbox.value) : 
+                                this.filters.status_filter === checkbox.value;
+                            checkbox.checked = isSelected;
+                        });
+                        // Update placeholder and visual state
+                        const placeholder = customMultiselect.querySelector('.multiselect-placeholder');
+                        const header = customMultiselect.querySelector('.multiselect-header');
+                        if (placeholder && header) {
+                            const selectedCheckboxes = Array.from(checkboxes).filter(cb => cb.checked);
+                            const selectedCount = selectedCheckboxes.length;
+                            if (selectedCount === 0) {
+                                placeholder.textContent = 'All Statuses';
+                                header.classList.remove('has-selection');
+                            } else {
+                                if (selectedCount === 1) {
+                                    placeholder.textContent = selectedCheckboxes[0].value;
+                                } else if (selectedCount === 2) {
+                                    placeholder.textContent = selectedCheckboxes.map(cb => cb.value).join(', ');
+                                } else {
+                                    placeholder.textContent = `${selectedCount} statuses selected`;
+                                }
+                                header.classList.add('has-selection');
+                            }
+                        }
+                    }
+                }
+
+                if (this.filters.category_filter) {
+                    const catVal = Array.isArray(this.filters.category_filter) ? this.filters.category_filter[0] : this.filters.category_filter;
+                    document.getElementById('category-filter').value = catVal;
+                }
+
+                // Update debug panel
+                this.updateDebugPanel();
+            },
+
+            // Update current filters from UI
+            updateFiltersFromUI() {
+                // Get values from UI, convert to arrays for thick client compatibility
+                this.filters.start_date = [document.getElementById('start-date').value];
+                this.filters.end_date = [document.getElementById('end-date').value];
+
+                // Handle multi-select status filter
+                const statusSelect = document.getElementById('status-filter');
+                const selectedStatuses = Array.from(statusSelect.selectedOptions).map(opt => opt.value);
+                this.filters.status_filter = selectedStatuses.length > 0 ? selectedStatuses : [''];
+
+                // Category filter (single select)
+                this.filters.category_filter = [document.getElementById('category-filter').value];
+
+                // Validate date range (compare first elements)
+                if (this.filters.start_date[0] && this.filters.end_date[0]) {
+                    if (this.filters.start_date[0] > this.filters.end_date[0]) {
+                        throw new Error('Start date must be before end date.');
+                    }
+                }
+
+                this.debugLog('Filters updated', this.filters);
+            },
+
+            // Reset filters to original configuration
+            resetFilters() {
+                if (this.config && this.config.params) {
+                    try {
+                        const originalParams = JSON.parse(this.config.params);
+                        this.filters = { ...this.filters, ...originalParams };
+                        this.updateUIFromConfig();
+                    } catch (e) {
+                        console.error('Failed to reset filters:', e);
+                    }
+                }
+            },
+
+            // Debug logging
+            debugLog(message, data = null) {
+                if (this.debugMode) {
+                    console.log(`[DEBUG] ${message}`, data || '');
+                }
+            },
+
+            // Setup debug panel
+            setupDebugPanel() {
+                const toggleBtn = document.getElementById('debug-toggle');
+                const debugPanel = document.getElementById('debug-panel');
+
+                toggleBtn.addEventListener('click', () => {
+                    debugPanel.style.display = debugPanel.style.display === 'block' ? 'none' : 'block';
+                    this.debugMode = debugPanel.style.display === 'block';
+                    toggleBtn.textContent = this.debugMode ? '❌' : '🔧';
+                });
+
+                // Hide by default
+                debugPanel.style.display = 'none';
+            },
+
+            // Update debug panel with current state
+            updateDebugPanel() {
+                if (!this.debugMode) return;
+
+                document.getElementById('debug-report-id').textContent = this.config?.reportId || 'N/A';
+                document.getElementById('debug-report-name').textContent = this.config?.reportName || 'N/A';
+                document.getElementById('debug-params').textContent = JSON.stringify(this.filters, null, 2);
+
+                // Thick client status
+                const thickClientAvailable = !!(window.ReportApp && window.ReportApp.refresh);
+                document.getElementById('debug-thick-client-available').textContent = thickClientAvailable ? '✅ Yes' : '❌ No';
+                document.getElementById('debug-thick-client-ready').textContent = thickClientAvailable ? '✅ Yes' : '❌ No';
+
+                // Datasource info
+                if (this.data) {
+                    document.getElementById('debug-datasource-count').textContent = Object.keys(this.data).length;
+                    document.getElementById('debug-datasource-list').textContent = Object.keys(this.data).join(', ');
+                }
+            },
+
+            // Show fatal error (replaces entire page)
+            showFatalError(message) {
+                document.body.innerHTML = `
+                    <div style="padding: 40px; text-align: center; font-family: sans-serif;">
+                        <h1 style="color: #e74c3c; margin-bottom: 20px;">⚠️ Report Error</h1>
+                        <div style="background: #ffeaa7; border-left: 6px solid #e17055; padding: 20px; border-radius: 8px; max-width: 600px; margin: 0 auto; text-align: left;">
+                            <p style="font-size: 16px; margin-bottom: 10px;"><strong>${message}</strong></p>
+                            <p style="color: #666; font-size: 14px;">Please ensure you are accessing this report through the reporting application with a valid signed URL.</p>
+                        </div>
+                    </div>
+                `;
+            }
+        };
+
+        // ===========================================================================
+        // THICK CLIENT INTEGRATION
+        // ===========================================================================
+
+        const ThickClientManager = {
+            // Check if thick client is available
+            isAvailable() {
+                return !!(window.ReportApp && typeof window.ReportApp.refresh === 'function');
+            },
+
+            // Verify thick client is ready
+            async verifyReady() {
+                // Check if ReportApp object exists at all
+                if (!window.ReportApp) {
+                    throw new Error('Thick client not available. Ensure you are accessing via reporting app.');
+                }
+
+                // Wait for ready event if needed
+                return new Promise((resolve) => {
+                    if (window.ReportApp.getParam) {
+                        resolve();
+                    } else {
+                        window.ReportApp.on('ready', resolve);
+                    }
+                });
+            },
+
+            // Fetch data via thick client
+            async fetchData(params = {}) {
+                console.log('🔄 Fetching data via thick client with params:', params);
+                console.log('Params detail:', JSON.stringify(params));
+
+                // Filter out organization_id as thick client manages it automatically
+                const filteredParams = { ...params };
+                delete filteredParams.organization_id;
+                console.log('Filtered params (without organization_id):', filteredParams);
+
+                try {
+                    // Verify thick client is ready
+                    console.log('Verifying thick client ready...');
+                    await this.verifyReady();
+                    console.log('Thick client verified ready');
+
+                    // Update last refresh timestamp for debug
+                    document.getElementById('debug-last-refresh').textContent = new Date().toLocaleTimeString();
+
+                    // Call thick client refresh with timeout
+                    console.log('Calling window.ReportApp.refresh...');
+                    const timeoutPromise = new Promise((_, reject) => {
+                        setTimeout(() => reject(new Error('Refresh timeout after 30 seconds')), 30000);
+                    });
+                    const data = await Promise.race([window.ReportApp.refresh(filteredParams), timeoutPromise]);
+                    console.log('✅ Data fetched successfully, datasources:', Object.keys(data));
+                    console.log('Data structure sample:', {
+                        radar_metrics: data.radar_metrics ? {
+                            hasColumns: !!data.radar_metrics.columns,
+                            hasRows: !!data.radar_metrics.rows,
+                            rowsLength: data.radar_metrics.rows ? data.radar_metrics.rows.length : 'null'
+                        } : 'missing'
+                    });
+                    ReportState.debugLog('Data fetched', { datasources: Object.keys(data) });
+
+                    return data;
+
+                } catch (error) {
+                    console.error('❌ Thick client fetch failed:', error);
+                    console.error('Error stack:', error.stack);
+                    throw error;
+                }
+            },
+
+            // Get current parameter value
+            getParam(key) {
+                if (!this.isAvailable()) return null;
+                return window.ReportApp.getParam(key);
+            },
+
+            // Update a mutable parameter
+            setParam(key, value) {
+                if (!this.isAvailable()) return false;
+
+                try {
+                    window.ReportApp.setParam(key, value);
+                    return true;
+                } catch (error) {
+                    console.error(`Failed to set parameter ${key}:`, error);
+                    return false;
+                }
+            }
+        };
+
+        // ===========================================================================
+        // UI CONTROLS & EVENT HANDLING
+        // ===========================================================================
+
+        const UIController = {
+            // Initialize UI controls
+            init() {
+                this.setupEventListeners();
+                this.setupLoadingStates();
+                this.setupErrorHandling();
+            },
+
+            // Setup event listeners for filters and buttons
+            setupEventListeners() {
+                const applyBtn = document.getElementById('apply-filters');
+                const resetBtn = document.getElementById('reset-filters');
+                const startDateInput = document.getElementById('start-date');
+                const endDateInput = document.getElementById('end-date');
+
+                // Apply filters button
+                applyBtn.addEventListener('click', () => this.onApplyFilters());
+
+                // Reset filters button
+                resetBtn.addEventListener('click', () => this.onResetFilters());
+
+                // Date input changes with debounce
+                let debounceTimer;
+                const debounceTime = 300; // ms
+
+                const scheduleFilterUpdate = () => {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => this.onApplyFilters(), debounceTime);
+                };
+
+                startDateInput.addEventListener('change', scheduleFilterUpdate);
+                endDateInput.addEventListener('input', scheduleFilterUpdate);
+                endDateInput.addEventListener('change', scheduleFilterUpdate);
+                endDateInput.addEventListener('input', scheduleFilterUpdate);
+
+                // Enter key in inputs
+                [startDateInput, endDateInput].forEach(input => {
+                    input.addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter') this.onApplyFilters();
+                    });
+                });
+
+                // Status select change handler with debounce
+                const statusSelect = document.getElementById('status-filter');
+                statusSelect.addEventListener('change', scheduleFilterUpdate);
+                
+                // Initialize custom multiselect for status filter
+                this.initCustomMultiselect();
+
+                console.log('✅ UI event listeners setup complete');
+            },
+
+            // Initialize custom multiselect dropdown
+            initCustomMultiselect() {
+                const header = document.getElementById('status-filter-header');
+                const dropdown = document.getElementById('status-filter-dropdown');
+                const checkboxes = dropdown.querySelectorAll('input[type="checkbox"]');
+                const hiddenSelect = document.getElementById('status-filter');
+                const selectAllBtn = document.getElementById('select-all-statuses');
+                const clearAllBtn = document.getElementById('clear-all-statuses');
+                const placeholder = header.querySelector('.multiselect-placeholder');
+                
+                // Function to sync checkboxes with hidden select
+                const syncCheckboxesToSelect = () => {
+                    // Clear all selections in hidden select
+                    Array.from(hiddenSelect.options).forEach(option => {
+                        option.selected = false;
+                    });
+                    
+                    // Set selected options based on checkboxes
+                    checkboxes.forEach(checkbox => {
+                        if (checkbox.checked) {
+                            const option = Array.from(hiddenSelect.options).find(
+                                opt => opt.value === checkbox.value
+                            );
+                            if (option) option.selected = true;
+                        }
+                    });
+                    
+                    // Update placeholder text and visual state
+                    const selectedCheckboxes = Array.from(checkboxes).filter(cb => cb.checked);
+                    const selectedCount = selectedCheckboxes.length;
+                    if (selectedCount === 0) {
+                        placeholder.textContent = 'All Statuses';
+                        header.classList.remove('has-selection');
+                    } else {
+                        if (selectedCount === 1) {
+                            placeholder.textContent = selectedCheckboxes[0].value;
+                        } else if (selectedCount === 2) {
+                            placeholder.textContent = selectedCheckboxes.map(cb => cb.value).join(', ');
+                        } else {
+                            placeholder.textContent = `${selectedCount} statuses selected`;
+                        }
+                        header.classList.add('has-selection');
+                    }
+                    
+                    // Trigger change event on hidden select to trigger filter update
+                    hiddenSelect.dispatchEvent(new Event('change'));
+                };
+                
+                // Function to sync hidden select to checkboxes (when page loads with existing filters)
+                const syncSelectToCheckboxes = () => {
+                    checkboxes.forEach(checkbox => {
+                        const option = Array.from(hiddenSelect.options).find(
+                            opt => opt.value === checkbox.value
+                        );
+                        checkbox.checked = option ? option.selected : false;
+                    });
+                    syncCheckboxesToSelect(); // Update placeholder
+                };
+                
+                // Toggle dropdown visibility
+                header.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    header.classList.toggle('active');
+                });
+                
+                // Close dropdown when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (!header.contains(e.target) && !dropdown.contains(e.target)) {
+                        header.classList.remove('active');
+                    }
+                });
+                
+                // Close dropdown with Escape key
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && header.classList.contains('active')) {
+                        header.classList.remove('active');
+                    }
+                });
+                
+                // Handle checkbox changes
+                checkboxes.forEach(checkbox => {
+                    checkbox.addEventListener('change', syncCheckboxesToSelect);
+                });
+                
+                // Select All button
+                selectAllBtn.addEventListener('click', () => {
+                    checkboxes.forEach(checkbox => {
+                        checkbox.checked = true;
+                    });
+                    syncCheckboxesToSelect();
+                });
+                
+                // Clear All button
+                clearAllBtn.addEventListener('click', () => {
+                    checkboxes.forEach(checkbox => {
+                        checkbox.checked = false;
+                    });
+                    syncCheckboxesToSelect();
+                });
+                
+                // Initial sync from hidden select to checkboxes
+                syncSelectToCheckboxes();
+                
+                // Also sync when hidden select changes (e.g., from reset filters)
+                hiddenSelect.addEventListener('change', syncSelectToCheckboxes);
+                
+                console.log('✅ Custom multiselect initialized');
+            },
+
+            // Setup loading state management
+            setupLoadingStates() {
+                // Body class for overall loading
+                document.body.classList.add('loading');
+
+                // We'll remove the loading class when data is loaded
+            },
+
+            // Setup error handling
+            setupErrorHandling() {
+                window.addEventListener('error', (event) => {
+                    console.error('Global error:', event.error || event.message);
+                    this.showError(event.error?.message || event.message);
+                });
+
+                window.addEventListener('unhandledrejection', (event) => {
+                    console.error('Unhandled promise rejection:', event.reason);
+                    this.showError(event.reason?.message || 'Promise rejected');
+                });
+            },
+
+            // Apply filters handler
+            async onApplyFilters() {
+                try {
+                    // Add pulse animation to apply button
+                    const applyBtn = document.getElementById('apply-filters');
+                    applyBtn.classList.add('btn-pulse');
+                    setTimeout(() => applyBtn.classList.remove('btn-pulse'), 1500);
+
+                    // Update filters from UI
+                    ReportState.updateFiltersFromUI();
+
+                    // Fetch new data
+                    await DataManager.loadData(ReportState.filters);
+
+                } catch (error) {
+                    this.showError(error.message);
+                }
+            },
+
+            // Reset filters handler
+            onResetFilters() {
+                ReportState.resetFilters();
+                this.onApplyFilters(); // Reload with reset filters
+            },
+
+            // Show loading overlay
+            showLoading() {
+                document.getElementById('loading-overlay').classList.add('active');
+                document.body.classList.add('loading');
+                document.getElementById('apply-filters').disabled = true;
+            },
+
+            // Hide loading overlay
+            hideLoading() {
+                document.getElementById('loading-overlay').classList.remove('active');
+                document.body.classList.remove('loading');
+                document.getElementById('apply-filters').disabled = false;
+            },
+
+            // Show error message
+            showError(message, details = '') {
+                const errorEl = document.getElementById('error-message');
+                const detailsEl = document.getElementById('error-details');
+
+                detailsEl.textContent = details || message;
+                errorEl.classList.add('show');
+
+                // Auto-hide after 10 seconds
+                setTimeout(() => {
+                    errorEl.classList.remove('show');
+                }, 10000);
+            },
+
+            // Hide error message
+            hideError() {
+                document.getElementById('error-message').classList.remove('show');
+            },
+
+            // Update summary cards with data
+            updateSummaryCards(data) {
+                const summaryCards = document.getElementById('summary-cards');
+
+                // Remove skeleton loaders
+                summaryCards.innerHTML = '';
+
+                // Create cards from summary_stats datasource
+                if (data.summary_stats && data.summary_stats.rows.length > 0) {
+                    const row = data.summary_stats.rows[0];
+                    const columns = data.summary_stats.columns;
+
+                    // Helper to get value by column name
+                    const getValue = (colName) => {
+                        const index = columns.indexOf(colName);
+                        return index !== -1 ? row[index] : 'N/A';
+                    };
+
+                    const totalReferrals = getValue('total_referrals');
+                    const uniqueSeekers = getValue('unique_seekers');
+                    const uniqueCategories = getValue('unique_categories');
+                    const completionRate = getValue('overall_completion_rate');
+                    const firstDate = getValue('first_referral_date');
+                    const lastDate = getValue('last_referral_date');
+
+                    // Format values
+                    const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
+                    const formatPercent = (val) => val !== 'N/A' ? (Math.round(val * 1000) / 10 + '%') : 'N/A';
+
+                    // Create cards with accent classes
+                    const cards = [
+                        { label: 'Total Referrals', value: totalReferrals, accent: 'blue', progress: null },
+                        { label: 'Unique Seekers', value: uniqueSeekers, accent: 'teal', progress: null },
+                        { label: 'Completion Rate', value: formatPercent(completionRate), accent: 'green', progress: completionRate },
+                        { label: 'Date Range', value: `${formatDate(firstDate)} - ${formatDate(lastDate)}`, accent: 'orange', progress: null }
+                    ];
+
+                    // Render cards
+                    cards.forEach(card => {
+                        const cardEl = document.createElement('div');
+                        cardEl.className = `summary-card accent-${card.accent}`;
+                        const progressBar = card.progress !== null ?
+                            `<div class="summary-progress">
+                                <div class="summary-progress-bar" style="width: ${Math.round(card.progress * 100)}%"></div>
+                            </div>` : '';
+                        cardEl.innerHTML = `
+                            <div class="summary-value accent-${card.accent}">${card.value}</div>
+                            ${progressBar}
+                            <div class="summary-label">${card.label}</div>
+                        `;
+                        summaryCards.appendChild(cardEl);
+
+                        if (card.progress !== null) {
+                            setTimeout(() => {
+                                const bar = cardEl.querySelector('.summary-progress-bar');
+                                if (bar) bar.style.width = Math.round(card.progress * 100) + '%';
+                            }, 100);
+                        }
+                    });
+                } else {
+                    // No data, show placeholder cards
+                    const placeholderCards = [
+                        { label: 'Total Referrals', value: '0', accent: 'blue', progress: null },
+                        { label: 'Unique Seekers', value: '0', accent: 'teal', progress: null },
+                        { label: 'Completion Rate', value: '0%', accent: 'green', progress: 0 },
+                        { label: 'Date Range', value: 'N/A', accent: 'orange', progress: null }
+                    ];
+
+                    placeholderCards.forEach(card => {
+                        const cardEl = document.createElement('div');
+                        cardEl.className = `summary-card accent-${card.accent}`;
+                        const progressBar = card.progress !== null ?
+                            `<div class="summary-progress">
+                                <div class="summary-progress-bar" style="width: ${Math.round(card.progress * 100)}%"></div>
+                            </div>` : '';
+                        cardEl.innerHTML = `
+                            <div class="summary-value accent-${card.accent}">${card.value}</div>
+                            ${progressBar}
+                            <div class="summary-label">${card.label}</div>
+                        `;
+                        summaryCards.appendChild(cardEl);
+                    });
+                }
+            }
+        };
+
+        // ===========================================================================
+        // DATA MANAGEMENT & PROCESSING
+        // ===========================================================================
+
+        const DataManager = {
+            // Load data with current filters
+            async loadData(params = {}) {
+                console.log('📥 Loading data with params:', params);
+
+                // Show loading state
+                UIController.showLoading();
+                UIController.hideError();
+
+                try {
+                    // Fetch data via thick client
+                    const data = await ThickClientManager.fetchData(params);
+
+                    // Update state
+                    ReportState.data = data;
+                    ReportState.updateDebugPanel();
+
+                    // Process and render data
+                    this.processData(data);
+
+                    // Update UI
+                    UIController.updateSummaryCards(data);
+
+                    console.log('✅ Data load complete');
+
+                } catch (error) {
+                    console.error('❌ Failed to load data:', error);
+                    UIController.showError(
+                        'Failed to load report data',
+                        `Error: ${error.message}\n\nPlease check your filters and try again.`
+                    );
+
+                    // Show empty states
+                    this.showEmptyStates();
+
+                } finally {
+                    // Hide loading state
+                    UIController.hideLoading();
+                }
+            },
+
+            // Process fetched data and update visualizations
+            processData(data) {
+                console.log('🔧 Processing data for visualization...');
+
+                // Update charts
+                this.updateRadarChart(data);
+                this.updatePolarAreaChart(data);
+                this.updateLineDatasetsChart(data);
+                this.updateStackedLineChart(data);
+
+                // Update data table (optional)
+                this.updateDataTable(data);
+
+                // Show/hide no-data states
+                this.updateNoDataStates(data);
+
+                ReportState.debugLog('Data processed', {
+                    chartCount: Object.keys(ReportState.charts).filter(k => ReportState.charts[k]).length,
+                    hasData: !!data
+                });
+            },
+
+            // Update time series chart
+            updateRadarChart(data) {
+                const canvas = document.getElementById('radar-chart');
+                const noDataEl = document.getElementById('radar-no-data');
+
+                if (!data.radar_metrics || !data.radar_metrics.rows || data.radar_metrics.rows.length === 0) {
+                    if (ReportState.charts.radar) {
+                        ReportState.charts.radar.destroy();
+                        ReportState.charts.radar = null;
+                    }
+                    noDataEl.style.display = 'flex';
+                    canvas.style.display = 'none';
+                    return;
+                }
+
+                const { columns, rows } = data.radar_metrics;
+                if (!columns || !rows) {
+                    console.warn('Missing columns or rows in radar_metrics datasource');
+                    if (ReportState.charts.radar) {
+                        ReportState.charts.radar.destroy();
+                        ReportState.charts.radar = null;
+                    }
+                    noDataEl.style.display = 'flex';
+                    canvas.style.display = 'none';
+                    return;
+                }
+                const categoryIndex = columns.indexOf('category');
+                const totalReferralsIndex = columns.indexOf('total_referrals');
+                const uniqueSeekersIndex = columns.indexOf('unique_seekers');
+                const completionRateIndex = columns.indexOf('completion_rate');
+
+                // Validate required columns
+                if (categoryIndex === -1 || totalReferralsIndex === -1 || uniqueSeekersIndex === -1 || completionRateIndex === -1) {
+                    console.warn('Missing required columns in radar_metrics datasource');
+                    if (ReportState.charts.radar) {
+                        ReportState.charts.radar.destroy();
+                        ReportState.charts.radar = null;
+                    }
+                    noDataEl.style.display = 'flex';
+                    canvas.style.display = 'none';
+                    return;
+                }
+
+                // Extract data
+                const labels = rows.map(row => row[categoryIndex]);
+                const totalReferrals = rows.map(row => row[totalReferralsIndex]);
+                const uniqueSeekers = rows.map(row => row[uniqueSeekersIndex]);
+                const completionRates = rows.map(row => row[completionRateIndex] * 100); // convert to percentage
+
+                // Normalize data for radar scales (optional)
+                // We'll keep raw values; each dataset will have its own scale.
+
+                // Convert canvas display
+                noDataEl.style.display = 'none';
+                canvas.style.display = 'block';
+
+                // Create or update chart
+                const ctx = canvas.getContext('2d');
+
+                if (ReportState.charts.radar) {
+                    // Update existing chart
+                    ReportState.charts.radar.data.labels = labels;
+                    ReportState.charts.radar.data.datasets[0].data = totalReferrals;
+                    ReportState.charts.radar.data.datasets[1].data = uniqueSeekers;
+                    ReportState.charts.radar.data.datasets[2].data = completionRates;
+                    ReportState.charts.radar.update();
+                } else {
+                    // Create new radar chart with skip points (skip point labels for better readability)
+                    ReportState.charts.radar = new Chart(ctx, {
+                        type: 'radar',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: 'Total Referrals',
+                                    data: totalReferrals,
+                                    borderColor: '#3a70a0',
+                                    backgroundColor: 'rgba(58, 112, 160, 0.12)',
+                                    borderWidth: 2.5,
+                                    pointRadius: 4,
+                                    pointHoverRadius: 6,
+                                    pointBackgroundColor: '#3a70a0'
+                                },
+                                {
+                                    label: 'Unique Seekers',
+                                    data: uniqueSeekers,
+                                    borderColor: '#167e8e',
+                                    backgroundColor: 'rgba(22, 126, 142, 0.12)',
+                                    borderWidth: 2.5,
+                                    pointRadius: 4,
+                                    pointHoverRadius: 6,
+                                    pointBackgroundColor: '#167e8e'
+                                },
+                                {
+                                    label: 'Completion Rate (%)',
+                                    data: completionRates,
+                                    borderColor: '#3c763d',
+                                    backgroundColor: 'rgba(60, 118, 61, 0.12)',
+                                    borderWidth: 2.5,
+                                    pointRadius: 4,
+                                    pointHoverRadius: 6,
+                                    pointBackgroundColor: '#3c763d'
+                                }
+                            ]
+                        },
+                            options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            animation: {
+                                duration: 1500,
+                                easing: 'easeOutQuart'
+                            },
+                            elements: {
+                                line: {
+                                    tension: 0.3
+                                }
+                            },
+                            scales: {
+                                r: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        display: true,
+                                        stepSize: 10,
+                                        backdropColor: 'transparent',
+                                        color: 'rgba(102,102,102,0.7)',
+                                        font: { size: 11 }
+                                    },
+                                    pointLabels: {
+                                        display: true,
+                                        color: '#33485e',
+                                        font: { size: 12, weight: '600' }
+                                    },
+                                    grid: {
+                                        circular: true,
+                                        color: 'rgba(52,72,94,0.12)'
+                                    },
+                                    angleLines: {
+                                        color: 'rgba(52,72,94,0.12)'
+                                    }
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                    labels: {
+                                        color: '#444',
+                                        font: { size: 12, weight: '500' },
+                                        padding: 14
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            },
+
+            // Update polar area chart with centered point labels
+            updatePolarAreaChart(data) {
+                const canvas = document.getElementById('polar-area-chart');
+                const noDataEl = document.getElementById('polar-no-data');
+
+                if (!data.status_distribution || !data.status_distribution.rows || data.status_distribution.rows.length === 0) {
+                    if (ReportState.charts.polarArea) {
+                        ReportState.charts.polarArea.destroy();
+                        ReportState.charts.polarArea = null;
+                    }
+                    noDataEl.style.display = 'flex';
+                    canvas.style.display = 'none';
+                    return;
+                }
+
+                const { columns, rows } = data.status_distribution;
+                if (!columns || !rows) {
+                    console.warn('Missing columns or rows in status_distribution datasource');
+                    if (ReportState.charts.polarArea) {
+                        ReportState.charts.polarArea.destroy();
+                        ReportState.charts.polarArea = null;
+                    }
+                    noDataEl.style.display = 'flex';
+                    canvas.style.display = 'none';
+                    return;
+                }
+                const statusIndex = columns.indexOf('status');
+                const countIndex = columns.indexOf('count');
+                const percentageIndex = columns.indexOf('percentage');
+
+                // Validate required columns
+                if (statusIndex === -1 || countIndex === -1 || percentageIndex === -1) {
+                    console.warn('Missing required columns in status_distribution datasource');
+                    if (ReportState.charts.polarArea) {
+                        ReportState.charts.polarArea.destroy();
+                        ReportState.charts.polarArea = null;
+                    }
+                    noDataEl.style.display = 'flex';
+                    canvas.style.display = 'none';
+                    return;
+                }
+
+                // Extract data
+                const labels = rows.map(row => row[statusIndex]);
+                const counts = rows.map(row => row[countIndex]);
+                const percentages = rows.map(row => row[percentageIndex]);
+
+                // Colors for polar area chart (STYLES.md palette)
+                const backgroundColors = [
+                    '#3a70a0', '#167e8e', '#3c763d', '#ef840f', '#bc473a',
+                    '#33485e', '#23527c', '#d14232', '#4593ff', '#00838f',
+                    '#192a56', '#006064', '#00b894', '#e84393', '#6c5ce7'
+                ];
+
+                // Convert canvas display
+                noDataEl.style.display = 'none';
+                canvas.style.display = 'block';
+
+                // Create or update chart
+                const ctx = canvas.getContext('2d');
+
+                if (ReportState.charts.polarArea) {
+                    // Update existing chart
+                    ReportState.charts.polarArea.data.labels = labels;
+                    ReportState.charts.polarArea.data.datasets[0].data = counts;
+                    ReportState.charts.polarArea.update();
+                } else {
+                    // Create new polar area chart with centered point labels
+                    ReportState.charts.polarArea = new Chart(ctx, {
+                        type: 'polarArea',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                data: counts,
+                                backgroundColor: backgroundColors.slice(0, labels.length).map(color => color + 'CC'),
+                                borderWidth: 3,
+                                borderColor: 'rgba(255, 255, 255, 0.8)',
+                                hoverBorderColor: 'rgba(255, 255, 255, 1)',
+                                hoverBorderWidth: 4,
+                                hoverBackgroundColor: backgroundColors.map(c => c + 'FF')
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            animation: {
+                                duration: 2000,
+                                easing: 'easeOutQuart'
+                            },
+                            layout: {
+                                padding: {
+                                    top: 20,
+                                    bottom: 20
+                                }
+                            },
+                            scales: {
+                                r: {
+                                    pointLabels: {
+                                        display: false
+                                    },
+                                    ticks: {
+                                        display: true,
+                                        backdropColor: 'transparent',
+                                        z: 10,
+                                        color: 'rgba(102,102,102,0.7)',
+                                        font: { size: 11 }
+                                    },
+                                    grid: {
+                                        circular: true,
+                                        color: 'rgba(52,72,94,0.12)'
+                                    }
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    position: 'right',
+                                    labels: {
+                                        padding: 12,
+                                        usePointStyle: true,
+                                        color: '#444',
+                                        font: { size: 12, weight: '500' }
+                                    }
+                                },
+                                tooltip: {
+                                    backgroundColor: 'rgba(51,72,94,0.95)',
+                                    titleFont: { size: 13, weight: '600' },
+                                    bodyFont: { size: 12 },
+                                    padding: 12,
+                                    cornerRadius: 6,
+                                    callbacks: {
+                                        label: function(context) {
+                                            const label = context.label || '';
+                                            const value = context.raw || 0;
+                                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                            const percentage = Math.round((value / total) * 100);
+                                            return `${label}: ${value} referrals (${percentage}%)`;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            },
+
+            // Update line chart with multiple datasets
+            updateLineDatasetsChart(data) {
+                const canvas = document.getElementById('line-datasets-chart');
+                const noDataEl = document.getElementById('line-datasets-no-data');
+
+                if (!data.time_series_metrics || !data.time_series_metrics.rows || data.time_series_metrics.rows.length === 0) {
+                    if (ReportState.charts.lineDatasets) {
+                        ReportState.charts.lineDatasets.destroy();
+                        ReportState.charts.lineDatasets = null;
+                    }
+                    noDataEl.style.display = 'flex';
+                    canvas.style.display = 'none';
+                    return;
+                }
+
+                const { columns, rows } = data.time_series_metrics;
+                if (!columns || !rows) {
+                    console.warn('Missing columns or rows in time_series_metrics datasource');
+                    if (ReportState.charts.lineDatasets) {
+                        ReportState.charts.lineDatasets.destroy();
+                        ReportState.charts.lineDatasets = null;
+                    }
+                    noDataEl.style.display = 'flex';
+                    canvas.style.display = 'none';
+                    return;
+                }
+                const dateIndex = columns.indexOf('date');
+                const totalIndex = columns.indexOf('total_referrals');
+                const completedIndex = columns.indexOf('completed_referrals');
+                const submittedIndex = columns.indexOf('submitted_referrals');
+                const inReviewIndex = columns.indexOf('in_review_referrals');
+                const uniqueSeekersIndex = columns.indexOf('unique_seekers');
+
+                // Validate required columns
+                if (dateIndex === -1 || totalIndex === -1 || completedIndex === -1 || submittedIndex === -1 || inReviewIndex === -1 || uniqueSeekersIndex === -1) {
+                    console.warn('Missing required columns in time_series_metrics datasource');
+                    if (ReportState.charts.lineDatasets) {
+                        ReportState.charts.lineDatasets.destroy();
+                        ReportState.charts.lineDatasets = null;
+                    }
+                    noDataEl.style.display = 'flex';
+                    canvas.style.display = 'none';
+                    return;
+                }
+
+                // Extract data
+                const labels = rows.map(row => row[dateIndex]);
+                const totals = rows.map(row => row[totalIndex]);
+                const completed = rows.map(row => row[completedIndex]);
+                const submitted = rows.map(row => row[submittedIndex]);
+                const inReview = rows.map(row => row[inReviewIndex]);
+                const uniqueSeekers = rows.map(row => row[uniqueSeekersIndex]);
+
+                // Convert canvas display
+                noDataEl.style.display = 'none';
+                canvas.style.display = 'block';
+
+                // Create or update chart
+                const ctx = canvas.getContext('2d');
+
+                if (ReportState.charts.lineDatasets) {
+                    // Update existing chart
+                    ReportState.charts.lineDatasets.data.labels = labels;
+                    ReportState.charts.lineDatasets.data.datasets[0].data = totals;
+                    ReportState.charts.lineDatasets.data.datasets[1].data = completed;
+                    ReportState.charts.lineDatasets.data.datasets[2].data = submitted;
+                    ReportState.charts.lineDatasets.data.datasets[3].data = inReview;
+                    ReportState.charts.lineDatasets.data.datasets[4].data = uniqueSeekers;
+                    ReportState.charts.lineDatasets.update();
+                } else {
+                    // Create new line chart with multiple datasets
+                    ReportState.charts.lineDatasets = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: 'Total Referrals',
+                                    data: totals,
+                                    borderColor: '#3a70a0',
+                                    backgroundColor: 'rgba(58, 112, 160, 0.08)',
+                                    borderWidth: 2.5,
+                                    fill: true,
+                                    tension: 0.35,
+                                    pointRadius: 3,
+                                    pointHoverRadius: 5,
+                                    pointBackgroundColor: '#3a70a0'
+                                },
+                                {
+                                    label: 'Completed',
+                                    data: completed,
+                                    borderColor: '#3c763d',
+                                    backgroundColor: 'rgba(60, 118, 61, 0.08)',
+                                    borderWidth: 2.5,
+                                    fill: true,
+                                    tension: 0.35,
+                                    pointRadius: 3,
+                                    pointHoverRadius: 5,
+                                    pointBackgroundColor: '#3c763d'
+                                },
+                                {
+                                    label: 'Submitted',
+                                    data: submitted,
+                                    borderColor: '#ef840f',
+                                    backgroundColor: 'rgba(239, 132, 15, 0.08)',
+                                    borderWidth: 2.5,
+                                    fill: true,
+                                    tension: 0.35,
+                                    pointRadius: 3,
+                                    pointHoverRadius: 5,
+                                    pointBackgroundColor: '#ef840f'
+                                },
+                                {
+                                    label: 'In Review',
+                                    data: inReview,
+                                    borderColor: '#bc473a',
+                                    backgroundColor: 'rgba(188, 71, 58, 0.08)',
+                                    borderWidth: 2.5,
+                                    fill: true,
+                                    tension: 0.35,
+                                    pointRadius: 3,
+                                    pointHoverRadius: 5,
+                                    pointBackgroundColor: '#bc473a'
+                                },
+                                {
+                                    label: 'Unique Seekers',
+                                    data: uniqueSeekers,
+                                    borderColor: '#167e8e',
+                                    backgroundColor: 'rgba(22, 126, 142, 0.08)',
+                                    borderWidth: 2.5,
+                                    fill: true,
+                                    tension: 0.35,
+                                    pointRadius: 3,
+                                    pointHoverRadius: 5,
+                                    pointBackgroundColor: '#167e8e'
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            animation: {
+                                duration: 1500,
+                                easing: 'easeOutQuart'
+                            },
+                            interaction: {
+                                mode: 'index',
+                                intersect: false
+                            },
+                            scales: {
+                                x: {
+                                    grid: {
+                                        display: false
+                                    },
+                                    ticks: {
+                                        color: 'rgba(102,102,102,0.7)',
+                                        font: { size: 11 },
+                                        maxRotation: 45
+                                    }
+                                },
+                                y: {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'left',
+                                    title: {
+                                        display: true,
+                                        text: 'Count',
+                                        color: '#33485e',
+                                        font: { size: 12, weight: '600' }
+                                    },
+                                    stacked: false,
+                                    grid: {
+                                        color: 'rgba(52,72,94,0.08)'
+                                    },
+                                    ticks: {
+                                        color: 'rgba(102,102,102,0.7)',
+                                        font: { size: 11 }
+                                    }
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                    labels: {
+                                        color: '#444',
+                                        font: { size: 12, weight: '500' },
+                                        padding: 14,
+                                        usePointStyle: true
+                                    }
+                                },
+                                tooltip: {
+                                    backgroundColor: 'rgba(51,72,94,0.95)',
+                                    titleFont: { size: 13, weight: '600' },
+                                    bodyFont: { size: 12 },
+                                    padding: 12,
+                                    cornerRadius: 6,
+                                    intersect: false,
+                                    mode: 'index'
+                                }
+                            }
+                        }
+                    });
+                }
+            },
+
+            // Update stacked line chart by category
+            updateStackedLineChart(data) {
+                const canvas = document.getElementById('stacked-line-chart');
+                const noDataEl = document.getElementById('stacked-line-no-data');
+
+                if (!data.category_time_series || !data.category_time_series.rows || data.category_time_series.rows.length === 0) {
+                    if (ReportState.charts.stackedLine) {
+                        ReportState.charts.stackedLine.destroy();
+                        ReportState.charts.stackedLine = null;
+                    }
+                    noDataEl.style.display = 'flex';
+                    canvas.style.display = 'none';
+                    return;
+                }
+
+                const { columns, rows } = data.category_time_series;
+                if (!columns || !rows) {
+                    console.warn('Missing columns or rows in category_time_series datasource');
+                    if (ReportState.charts.stackedLine) {
+                        ReportState.charts.stackedLine.destroy();
+                        ReportState.charts.stackedLine = null;
+                    }
+                    noDataEl.style.display = 'flex';
+                    canvas.style.display = 'none';
+                    return;
+                }
+                const dateIndex = columns.indexOf('date');
+                const categoryIndex = columns.indexOf('category');
+                const countIndex = columns.indexOf('referral_count');
+
+                // Validate required columns
+                if (dateIndex === -1 || categoryIndex === -1 || countIndex === -1) {
+                    console.warn('Missing required columns in category_time_series datasource');
+                    if (ReportState.charts.stackedLine) {
+                        ReportState.charts.stackedLine.destroy();
+                        ReportState.charts.stackedLine = null;
+                    }
+                    noDataEl.style.display = 'flex';
+                    canvas.style.display = 'none';
+                    return;
+                }
+
+                // Pivot data: group by category, collect series per date
+                const categories = [...new Set(rows.map(row => row[categoryIndex]))];
+                const dates = [...new Set(rows.map(row => row[dateIndex]))].sort();
+
+                // Limit to top 8 categories for readability
+                const topCategories = categories.slice(0, 8);
+
+                // Prepare dataset for each category
+                const datasets = topCategories.map((category, idx) => {
+                    // Filter rows for this category and map date to count
+                    const categoryRows = rows.filter(row => row[categoryIndex] === category);
+                    const countMap = new Map(categoryRows.map(row => [row[dateIndex], row[countIndex]]));
+                    const data = dates.map(date => countMap.get(date) || 0);
+
+                    // Color palette (STYLES.md)
+                    const colors = [
+                        '#3a70a0', '#167e8e', '#3c763d', '#ef840f', '#bc473a',
+                        '#33485e', '#23527c', '#d14232', '#4593ff', '#00838f'
+                    ];
+                    return {
+                        label: category,
+                        data: data,
+                        borderColor: colors[idx % colors.length],
+                        backgroundColor: colors[idx % colors.length] + '25',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3,
+                        stack: 'stack',
+                        pointRadius: 2,
+                        pointHoverRadius: 4
+                    };
+                });
+
+                // Convert canvas display
+                noDataEl.style.display = 'none';
+                canvas.style.display = 'block';
+
+                // Create or update chart
+                const ctx = canvas.getContext('2d');
+
+                if (ReportState.charts.stackedLine) {
+                    // Update existing chart
+                    ReportState.charts.stackedLine.data.labels = dates;
+                    ReportState.charts.stackedLine.data.datasets = datasets;
+                    ReportState.charts.stackedLine.update();
+                } else {
+                    // Create new stacked line chart
+                    ReportState.charts.stackedLine = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: dates,
+                            datasets: datasets
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            animation: {
+                                duration: 1500,
+                                easing: 'easeOutQuart'
+                            },
+                            interaction: {
+                                mode: 'index',
+                                intersect: false
+                            },
+                            scales: {
+                                x: {
+                                    grid: {
+                                        display: false
+                                    },
+                                    ticks: {
+                                        color: 'rgba(102,102,102,0.7)',
+                                        font: { size: 11 },
+                                        maxRotation: 45
+                                    }
+                                },
+                                y: {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'left',
+                                    title: {
+                                        display: true,
+                                        text: 'Referral Count',
+                                        color: '#33485e',
+                                        font: { size: 12, weight: '600' }
+                                    },
+                                    stacked: true,
+                                    grid: {
+                                        color: 'rgba(52,72,94,0.08)'
+                                    },
+                                    ticks: {
+                                        color: 'rgba(102,102,102,0.7)',
+                                        font: { size: 11 }
+                                    }
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                    labels: {
+                                        color: '#444',
+                                        font: { size: 11, weight: '500' },
+                                        padding: 12,
+                                        usePointStyle: true
+                                    }
+                                },
+                                tooltip: {
+                                    backgroundColor: 'rgba(51,72,94,0.95)',
+                                    titleFont: { size: 13, weight: '600' },
+                                    bodyFont: { size: 12 },
+                                    padding: 12,
+                                    cornerRadius: 6,
+                                    intersect: false,
+                                    mode: 'index'
+                                }
+                            }
+                        }
+                    });
+                }
+            },
+
+            // Update data table
+            updateDataTable(data) {
+                // Table hidden by default (container display:none)
+                document.getElementById('data-table').style.display = 'none';
+                document.getElementById('table-no-data').style.display = 'none';
+            },
+
+            // Show empty states when no data
+            showEmptyStates() {
+                // Clear summary cards
+                const summaryCards = document.getElementById('summary-cards');
+                summaryCards.innerHTML = `
+                    <div class="summary-card" style="border-left:4px solid var(--color-red)">
+                        <div class="summary-value" style="color:var(--color-red)">0</div>
+                        <div class="summary-label">Total Referrals</div>
+                    </div>
+                    <div class="summary-card" style="border-left:4px solid var(--color-red)">
+                        <div class="summary-value" style="color:var(--color-red)">0</div>
+                        <div class="summary-label">Unique Seekers</div>
+                    </div>
+                    <div class="summary-card" style="border-left:4px solid var(--color-red)">
+                        <div class="summary-value" style="color:var(--color-red)">0%</div>
+                        <div class="summary-label">Completion Rate</div>
+                    </div>
+                    <div class="summary-card" style="border-left:4px solid var(--color-red)">
+                        <div class="summary-value" style="color:var(--color-red)">Error</div>
+                        <div class="summary-label">Data Load Failed</div>
+                    </div>
+                `;
+
+                // Show no-data messages for our four charts
+                document.getElementById('radar-no-data').style.display = 'flex';
+                document.getElementById('polar-no-data').style.display = 'flex';
+                document.getElementById('line-datasets-no-data').style.display = 'flex';
+                document.getElementById('stacked-line-no-data').style.display = 'flex';
+                document.getElementById('radar-chart').style.display = 'none';
+                document.getElementById('polar-area-chart').style.display = 'none';
+                document.getElementById('line-datasets-chart').style.display = 'none';
+                document.getElementById('stacked-line-chart').style.display = 'none';
+
+                // Hide data table
+                document.getElementById('data-table').style.display = 'none';
+                document.getElementById('table-no-data').style.display = 'flex';
+
+                // Destroy all chart instances
+                if (ReportState.charts.radar) {
+                    ReportState.charts.radar.destroy();
+                    ReportState.charts.radar = null;
+                }
+                if (ReportState.charts.polarArea) {
+                    ReportState.charts.polarArea.destroy();
+                    ReportState.charts.polarArea = null;
+                }
+                if (ReportState.charts.lineDatasets) {
+                    ReportState.charts.lineDatasets.destroy();
+                    ReportState.charts.lineDatasets = null;
+                }
+                if (ReportState.charts.stackedLine) {
+                    ReportState.charts.stackedLine.destroy();
+                    ReportState.charts.stackedLine = null;
+                }
+            },
+
+            // Update no-data states based on available data
+            updateNoDataStates(data) {
+                // Radar chart
+                if (!data.radar_metrics || !data.radar_metrics.rows || data.radar_metrics.rows.length === 0) {
+                    document.getElementById('radar-no-data').style.display = 'flex';
+                    document.getElementById('radar-chart').style.display = 'none';
+                } else {
+                    document.getElementById('radar-no-data').style.display = 'none';
+                    document.getElementById('radar-chart').style.display = 'block';
+                }
+
+                // Polar area chart
+                if (!data.status_distribution || !data.status_distribution.rows || data.status_distribution.rows.length === 0) {
+                    document.getElementById('polar-no-data').style.display = 'flex';
+                    document.getElementById('polar-area-chart').style.display = 'none';
+                } else {
+                    document.getElementById('polar-no-data').style.display = 'none';
+                    document.getElementById('polar-area-chart').style.display = 'block';
+                }
+
+                // Line datasets chart
+                if (!data.time_series_metrics || !data.time_series_metrics.rows || data.time_series_metrics.rows.length === 0) {
+                    document.getElementById('line-datasets-no-data').style.display = 'flex';
+                    document.getElementById('line-datasets-chart').style.display = 'none';
+                } else {
+                    document.getElementById('line-datasets-no-data').style.display = 'none';
+                    document.getElementById('line-datasets-chart').style.display = 'block';
+                }
+
+                // Stacked line chart
+                if (!data.category_time_series || !data.category_time_series.rows || data.category_time_series.rows.length === 0) {
+                    document.getElementById('stacked-line-no-data').style.display = 'flex';
+                    document.getElementById('stacked-line-chart').style.display = 'none';
+                } else {
+                    document.getElementById('stacked-line-no-data').style.display = 'none';
+                    document.getElementById('stacked-line-chart').style.display = 'block';
+                }
+
+                // Table (optional, keep hidden)
+                document.getElementById('data-table').style.display = 'none';
+                document.getElementById('table-no-data').style.display = 'flex';
+            }
+        };
+
+        // ===========================================================================
+        // INITIALIZATION
+        // ===========================================================================
+
+        // Main initialization function
+        async function initializeReport() {
+            console.log('🚀 Initializing Report Template...');
+            console.log('Checking for window.ReportApp:', typeof window.ReportApp, window.ReportApp);
+            console.log('Checking for window.ReportConfig:', typeof window.ReportConfig, window.ReportConfig);
+
+            try {
+                // 1. Initialize report state
+                ReportState.init();
+
+                // 2. Initialize UI controls (can happen before thick client is ready)
+                UIController.init();
+
+                // 3. Wait for thick client to be ready
+                try {
+                    await ThickClientManager.verifyReady();
+                } catch (error) {
+                    console.warn('⚠️ Thick client not ready yet:', error.message);
+                    console.log('window.ReportApp status:', window.ReportApp);
+
+                    // Don't show error immediately, wait for ready event
+                    return;
+                }
+
+                // 4. Load initial data
+                await DataManager.loadData(ReportState.filters);
+
+                console.log('✅ Report initialization complete');
+
+            } catch (error) {
+                console.error('❌ Report initialization failed:', error);
+                UIController.showError(
+                    'Failed to initialize report',
+                    `Error: ${error.message}\n\nPlease check the browser console for details.`
+                );
+
+                // Show fatal error if thick client not available
+                if (error.message.includes('Thick client not available')) {
+                    ReportState.showFatalError('Cannot load report. Ensure you are accessing through the reporting application.');
+                }
+            }
+        }
+
+        // Alternative initialization that waits for thick client ready event
+        function setupThickClientListener() {
+            console.log('Setting up thick client listener...');
+            console.log('Current window.ReportApp:', window.ReportApp);
+            console.log('Current window.ReportConfig:', window.ReportConfig);
+
+            // Debug: check if thick client script tag exists
+            const thickClientScripts = document.querySelectorAll('script[src*="thick_client"]');
+            console.log(`Found ${thickClientScripts.length} thick client script tags in document`);
+            thickClientScripts.forEach((script, i) => {
+                console.log(`Script ${i}:`, script.src, script.async, script.defer);
+            });
+
+            // Initialize retry counter if not exists
+            if (!window.thickClientRetryCount) window.thickClientRetryCount = 0;
+
+            // Check if window.ReportConfig exists (this is injected by server independently)
+            if (!window.ReportConfig) {
+                console.error('❌ CRITICAL: window.ReportConfig not found!');
+                console.error('The server is not injecting report configuration.');
+                console.error('This report MUST be accessed via /api/embed endpoint with proper HMAC signing.');
+
+                window.thickClientRetryCount++;
+                if (window.thickClientRetryCount >= 3) {
+                    ReportState.showFatalError(
+                        'Report configuration missing.\n\n' +
+                        'This report must be accessed through the reporting application.\n' +
+                        'Please ensure you are using the correct URL provided by the reporting app.'
+                    );
+                    return;
+                }
+
+                setTimeout(setupThickClientListener, 1000);
+                return;
+            }
+
+            if (!window.ReportApp) {
+                window.thickClientRetryCount++;
+                console.log(`window.ReportApp not defined yet (attempt ${window.thickClientRetryCount}/20), will check again`);
+                console.log('But window.ReportConfig exists:', window.ReportConfig);
+
+                if (window.thickClientRetryCount >= 20) {
+                    console.error('Thick client failed to load after 20 attempts (10 seconds)');
+                    console.error('window.ReportConfig exists but window.ReportApp does not');
+                    console.error('Possible thick client script loading failure');
+
+                    // Try to manually load thick client as last resort
+                    console.log('Attempting to manually load thick client script...');
+                    const script = document.createElement('script');
+                    script.src = '/static/thick_client.js';
+                    script.onload = function() {
+                        console.log('Manually loaded thick client script, retrying...');
+                        setTimeout(setupThickClientListener, 500);
+                    };
+                    script.onerror = function() {
+                        console.error('Failed to manually load thick client script');
+                        ReportState.showFatalError(
+                            'Report engine script failed to load.\n\n' +
+                            'Possible issues:\n' +
+                            '1. Thick client script not found at /static/thick_client.js\n' +
+                            '2. Server configuration error\n' +
+                            '3. HMAC validation failed\n\n' +
+                            'Please check browser console and server logs.'
+                        );
+                    };
+                    document.head.appendChild(script);
+                    return;
+                }
+
+                setTimeout(setupThickClientListener, 500);
+                return;
+            }
+
+            // Reset retry counter since ReportApp is now available
+            window.thickClientRetryCount = 0;
+
+            // Check if thick client is already ready
+            if (window.ReportApp.getParam && typeof window.ReportApp.refresh === 'function') {
+                console.log('Thick client already ready, initializing report');
+                console.log('ReportApp methods available:', {
+                    getParam: typeof window.ReportApp.getParam,
+                    refresh: typeof window.ReportApp.refresh,
+                    on: typeof window.ReportApp.on,
+                    setParam: typeof window.ReportApp.setParam
+                });
+                initializeReport();
+                return;
+            }
+
+            // Check if refresh method exists (minimum requirement)
+            if (typeof window.ReportApp.refresh !== 'function') {
+                console.error('window.ReportApp.refresh is not a function, thick client is incomplete');
+                console.log('window.ReportApp methods:', {
+                    getParam: typeof window.ReportApp.getParam,
+                    refresh: typeof window.ReportApp.refresh,
+                    on: typeof window.ReportApp.on,
+                    setParam: typeof window.ReportApp.setParam
+                });
+
+                // Keep waiting, maybe it will be initialized
+                setTimeout(setupThickClientListener, 500);
+                return;
+            }
+
+            // Wait for ready event (check if .on method exists)
+            if (typeof window.ReportApp.on === 'function') {
+                console.log('Waiting for thick client ready event...');
+                window.ReportApp.on('ready', function(eventData) {
+                    console.log('Thick client ready for report:', eventData?.reportId || 'unknown');
+                    initializeReport();
+                });
+            } else {
+                console.error('window.ReportApp.on is not a function, thick client may be incomplete');
+                console.log('window.ReportApp keys:', Object.keys(window.ReportApp || {}));
+
+                // Try to initialize anyway after a short delay
+                setTimeout(() => {
+                    console.log('Attempting to initialize despite missing .on method');
+                    initializeReport();
+                }, 1000);
+            }
+        }
+
+        // Start initialization when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', setupThickClientListener);
+        } else {
+            setupThickClientListener();
+        }
+
+        // ===========================================================================
+        // DEVELOPMENT UTILITIES
+        // ===========================================================================
+        // The following code is for development/debugging purposes only.
+        // Remove or comment out in production reports.
+
+        // Expose utilities to global scope for console debugging
+        window.ReportTemplate = {
+            state: ReportState,
+            dataManager: DataManager,
+            uiController: UIController,
+            thickClient: ThickClientManager,
+
+            // Utility to reload data with custom parameters
+            reloadData: async (params = {}) => {
+                console.log('🔄 Manual reload triggered via console');
+                await DataManager.loadData(params);
+            },
+
+            // Utility to show debug panel
+            showDebug: () => {
+                document.getElementById('debug-panel').style.display = 'block';
+                document.getElementById('debug-toggle').textContent = '❌';
+                ReportState.debugMode = true;
+                ReportState.updateDebugPanel();
+            },
+
+            // Utility to test error handling
+            testError: (message = 'Test error') => {
+                UIController.showError(message, 'This is a test error message for debugging.');
+            }
+        };
+
+        // Theme toggle
+        const themeToggle = document.getElementById('theme-toggle');
+        if (themeToggle) {
+            themeToggle.addEventListener('click', () => {
+                document.body.classList.toggle('dark-theme');
+                const isDark = document.body.classList.contains('dark-theme');
+                document.getElementById('theme-icon').textContent = isDark ? '☀️' : '🌙';
+                document.getElementById('theme-text').textContent = isDark ? 'Light' : 'Dark';
+
+                if (ReportState.charts.radar) ReportState.charts.radar.update('none');
+                if (ReportState.charts.polarArea) ReportState.charts.polarArea.update('none');
+                if (ReportState.charts.lineDatasets) ReportState.charts.lineDatasets.update('none');
+                if (ReportState.charts.stackedLine) ReportState.charts.stackedLine.update('none');
+
+                try {
+                    localStorage.setItem('report-theme', isDark ? 'dark' : 'light');
+                } catch (e) {
+                    console.log('LocalStorage not available (sandboxed)');
+                }
+            });
+
+            try {
+                const savedTheme = localStorage.getItem('report-theme');
+                if (savedTheme === 'dark') {
+                    document.body.classList.add('dark-theme');
+                    document.getElementById('theme-icon').textContent = '☀️';
+                    document.getElementById('theme-text').textContent = 'Light';
+                }
+            } catch (e) {
+                console.log('LocalStorage not available (sandboxed)');
+            }
+        }
+
+        // Update timestamp function
+        function updateTimestamp() {
+            try {
+                const updateTimeEl = document.getElementById('update-time');
+                if (updateTimeEl) {
+                    const now = new Date();
+                    const timeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                    const dateString = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    updateTimeEl.textContent = `${dateString} ${timeString}`;
+                }
+            } catch (e) {
+                console.log('Failed to update timestamp:', e);
+            }
+        }
+
+        // Update timestamp once DOM is ready
+        function initializeTimestamp() {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => {
+                    updateTimestamp();
+                    setInterval(updateTimestamp, 60000);
+                });
+            } else {
+                updateTimestamp();
+                setInterval(updateTimestamp, 60000);
+            }
+        }
+
+        // Start timestamp updates
+        initializeTimestamp();
+
+        // Print functionality
+        const printButton = document.getElementById('print-dashboard');
+        if (printButton) {
+            printButton.addEventListener('click', async function() {
+                console.log('🖨️ Preparing dashboard for printing...');
+
+                // Add pulse animation to print button
+                printButton.classList.add('btn-pulse');
+                setTimeout(() => printButton.classList.remove('btn-pulse'), 1500);
+
+                // Check if we have any data loaded
+                if (!ReportState.data || Object.keys(ReportState.data).length === 0) {
+                    UIController.showError('No data to print. Please wait for data to load or apply filters.');
+                    return;
+                }
+
+                try {
+                    // Show loading state
+                    UIController.showLoading();
+
+                    // Add print date to header for print version
+                    const now = new Date();
+                    const printDate = now.toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    document.querySelector('.header').setAttribute('data-print-date', printDate);
+
+                    // Prepare charts for high-resolution printing
+                    await prepareChartsForPrint();
+
+                    // Wait a moment for any DOM updates
+                    setTimeout(() => {
+                        // Trigger browser print dialog
+                        window.print();
+
+                        // Restore UI after printing
+                        setTimeout(() => {
+                            UIController.hideLoading();
+                            console.log('✅ Print dialog opened');
+                        }, 500);
+                    }, 100);
+
+                } catch (error) {
+                    console.error('❌ Print preparation failed:', error);
+                    UIController.showError('Failed to prepare print view: ' + error.message);
+                    UIController.hideLoading();
+                }
+            });
+        }
+
+        // Function to prepare charts for printing
+        async function prepareChartsForPrint() {
+            console.log('Preparing charts for printing...');
+
+            // Get all chart instances
+            const charts = [
+                ReportState.charts.radar,
+                ReportState.charts.polarArea,
+                ReportState.charts.lineDatasets,
+                ReportState.charts.stackedLine
+            ];
+
+            // Prepare each chart for printing
+            for (const chart of charts) {
+                if (chart && chart.canvas) {
+                    try {
+                        const chartType = chart.config?.type || 'unknown';
+                        console.log(`Preparing ${chartType} chart for printing...`);
+
+                        // Ensure chart is fully rendered and up-to-date
+                        // Chart.js handles devicePixelRatio automatically for canvas resolution
+                        // Modern browsers print canvas elements at reasonable quality
+                        chart.resize(); // Ensure proper dimensions
+                        chart.render(); // Force re-render
+
+                        // For better print quality on high-DPI printers,
+                        // we could increase the devicePixelRatio temporarily
+                        // but this is complex and may affect display
+                        // The current approach should work well for most cases
+
+                    } catch (chartError) {
+                        console.warn(`Failed to prepare chart for printing:`, chartError);
+                        // Continue with other charts even if one fails
+                    }
+                }
+            }
+
+            return Promise.resolve();
+        }
+
+        // Listen for print events to restore UI
+        window.addEventListener('afterprint', function() {
+            console.log('🔄 Print completed, restoring UI...');
+            // Remove print date attribute
+            const header = document.querySelector('.header');
+            if (header) {
+                header.removeAttribute('data-print-date');
+            }
+        });
+
+        console.log('🔧 Report Template loaded v2.2 (2026-05-09) with print support. Access utilities via window.ReportTemplate');
+
+    </script>
+</body>
+</html>
