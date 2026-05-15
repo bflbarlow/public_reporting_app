@@ -164,8 +164,8 @@ func (h *EmbedHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // renderReport renders the HTML for a report
 func (h *EmbedHandler) renderReport(w http.ResponseWriter, r *http.Request, report *core.Report, params map[string][]string) {
-	// 1. Construct path to dashboard.html
-	htmlPath := filepath.Join("reports", report.ID, "dashboard.html")
+	// 1. Construct path to report.html
+	htmlPath := filepath.Join("reports", report.ID, "report.html")
 	
 	// 2. Read HTML file
 	content, err := os.ReadFile(htmlPath)

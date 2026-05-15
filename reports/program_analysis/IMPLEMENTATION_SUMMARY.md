@@ -37,7 +37,7 @@ Successfully implemented **Approach 1: Browser Print + CSS Media Queries** for t
 ## Technical Details
 
 ### Files Modified
-1. **`dashboard.html`** - Primary implementation
+1. **`report.html`** - Primary implementation
    - Added print button HTML in header
    - Added `@media print` CSS styles (lines 650-730)
    - Added JavaScript print handler (lines 2430-2520)

@@ -98,4 +98,4 @@ If encountering "Thick client not available" error:
 
 ---
 
-**Note**: The fixes require the updated `dashboard.html` file. If server is caching old version, may need server restart or cache clear.
+**Note**: The fixes require the updated `report.html` file. If server is caching old version, may need server restart or cache clear.

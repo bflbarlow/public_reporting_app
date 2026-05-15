@@ -144,7 +144,7 @@ rows, err := db.QueryContext(ctx, sql, args...)
 - ⚠️ **DOM-based XSS:** Report HTML may contain unsafe JavaScript
 
 **Vulnerability Points:**
-1. **Dashboard HTML:** User-provided HTML in `reports/*/dashboard.html`
+1. **Report HTML:** User-provided HTML in `reports/*/report.html`
 2. **Parameter Reflection:** Parameters could be reflected in HTML/JS
 3. **JSON Injection:** Improper JSON parsing in thick client
 

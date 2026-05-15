@@ -39,7 +39,7 @@ Remove the "little 'lift' movement" animations on chart-card and summary-card el
  - Filter container and input transitions
 
 ## Files Modified
-- `dashboard.html` - Updated CSS rules (lines ~340 and ~283)
+- `report.html` - Updated CSS rules (lines ~340 and ~283)
 
 ## Testing
 - Hover over chart cards: No vertical movement

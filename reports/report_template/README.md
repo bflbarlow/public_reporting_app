@@ -15,7 +15,7 @@ A comprehensive starting point for creating new reports with the thick client ar
    - Replace SQL queries with your actual queries
    - Ensure all queries include `organization_id = {{organization_id}}`
 
-3. **Update `dashboard.html`:**
+3. **Update `report.html`:**
    - Update report title and description in HTML
    - Replace `Chart.js` with your preferred visualization library
    - Modify JavaScript to process your specific datasources
@@ -57,7 +57,7 @@ A comprehensive starting point for creating new reports with the thick client ar
 ```
 report_template/
 ├── report.yaml           # Report definition with SQL queries
-├── dashboard.html        # Complete HTML/CSS/JS dashboard
+├── report.html        # Complete HTML/CSS/JS report
 └── README.md            # This file
 ```
 
@@ -88,7 +88,7 @@ datasources:
         -- Add your filters
 ```
 
-### 2. **`dashboard.html` - Visualization**
+### 2. **`report.html` - Visualization**
 
 #### CSS Customization:
 - Update colors in the `<style>` section

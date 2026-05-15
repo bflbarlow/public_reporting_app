@@ -136,7 +136,7 @@ datasources:
 - [x] Chart tooltips show correct data
 
 ## Files Modified
-- `dashboard.html` - Complete overhaul (2161 lines)
+- `report.html` - Complete overhaul (2161 lines)
 - `CHANGES_SUMMARY.md` - This file
 
 ## Files Unchanged (as required)

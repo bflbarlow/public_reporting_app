@@ -73,7 +73,7 @@ Need to create datasources that:
 3. Provide multidimensional metrics for parallel coordinates
 4. Enable Sankey flow visualization between journey stages
 
-### 3. Dashboard Design (`dashboard.html`)
+### 3. Report Design (`report.html`)
 - Replace Chart.js with Plotly.js CDN
 - Implement interactive visualization grid with:
   - Sankey diagram for journey flow
@@ -111,7 +111,7 @@ Need to create datasources that:
 
 ### Immediate Actions
 1. **Update `report.yaml`** with actual SQL queries for customer journey data
-2. **Rewrite `dashboard.html`** with Plotly.js visualizations
+2. **Rewrite `report.html`** with Plotly.js visualizations
 3. **Test** with generated URL: `go run main.go -genurl -report customer_sql_reporting -params "organization_id=1,start_date=2024-01-01,end_date=2024-12-31"`
 
 ### SQL Query Development
