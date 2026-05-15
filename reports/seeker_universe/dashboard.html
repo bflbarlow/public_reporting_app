@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Seeker Universe Hologram</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #050510;
+      color: #fff;
+      font-family: system-ui, sans-serif;
+      user-select: none;
+    }
+    #infoPanel {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 260px;
+      background: rgba(0,0,0,0.55);
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 12px;
+      backdrop-filter: blur(6px);
+      color: #d0d0ff;
+      font-size: 13px;
+      z-index: 100;
+    }
+    #infoPanel h2 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      color: #9ca3ff;
+    }
+    #infoPanel .row {
+      margin-bottom: 6px;
+    }
+    #infoPanel strong {
+      color: #a5b4fc;
+    }
+    #controls {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      display: flex;
+      gap: 8px;
+      z-index: 100;
+    }
+    .control-btn {
+      background: rgba(0,0,0,0.55);
+      border: 1px solid #333;
+      border-radius: 6px;
+      color: #9ca3ff;
+      padding: 8px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      backdrop-filter: blur(6px);
+      transition: all 0.2s;
+    }
+    .control-btn:hover {
+      background: rgba(60, 60, 100, 0.7);
+      border-color: #636efa;
+    }
+    #status {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      color: #9ca3ff;
+      font-size: 12px;
+      background: rgba(0,0,0,0.4);
+      padding: 6px 10px;
+      border-radius: 4px;
+      z-index: 100;
+    }
+    canvas {
+      cursor: grab;
+    }
+    canvas.dragging {
+      cursor: grabbing;
+    }
+    canvas.node-dragging {
+      cursor: grabbing;
+    }
+  </style>
+  <script src="/static/thick_client.js"></script>
+</head>
+<body>
+
+<div id="loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #9ca3ff; font-size: 18px;">Loading seeker universe...</div>
+<div id="error" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: #f87171; padding: 20px; border-radius: 8px; max-width: 80%;"></div>
+<canvas id="universe" style="display: none;"></canvas>
+
+<div id="infoPanel" style="display:none;"></div>
+
+<div id="controls">
+  <button class="control-btn" id="resetZoom">Reset View</button>
+  <button class="control-btn" id="centerView">Center</button>
+  <button class="control-btn" id="togglePhysics">Pause Physics</button>
+</div>
+
+<div id="status">Zoom: 1.00x | Drag background to pan | Drag nodes to reposition</div>
+
+<script defer>
+(async function() {
+  if (!window.ReportApp) {
+    console.error('ReportApp not loaded');
+    document.getElementById('error').style.display = 'block';
+    document.getElementById('error').innerHTML = '<h3>Error</h3><p>Thick client not loaded</p>';
+    document.getElementById('loading').style.display = 'none';
+    return;
+  }
+  
+  // Wait for ReportApp to be ready
+  if (!window.ReportApp.getParams) {
+    await new Promise(resolve => window.ReportApp.on('ready', resolve));
+  }
+  
+  // Ensure ReportConfig is available (injected by reporting_app)
+  if (!window.ReportConfig) {
+    console.log('Waiting for ReportConfig injection...');
+    await new Promise(resolve => {
+      const start = Date.now();
+      const check = () => {
+        if (window.ReportConfig) {
+          resolve();
+        } else if (Date.now() - start < 2000) {
+          setTimeout(check, 10);
+        } else {
+          console.error('ReportConfig not injected after 2 seconds');
+          resolve(); // Continue anyway, thick client might handle it
+        }
+      };
+      check();
+    });
+  }
+  
+  console.log('ReportConfig after wait:', window.ReportConfig);
+  const loadingEl = document.getElementById('loading');
+  const errorEl = document.getElementById('error');
+  const canvas = document.getElementById('universe');
+  const ctx = canvas.getContext('2d');
+  let W = canvas.width = window.innerWidth;
+  let H = canvas.height = window.innerHeight;
+
+  window.addEventListener('resize', () => {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  });
+
+  // Helper to extract rows from datasource response
+  function extractRows(data, datasourceName) {
+    const ds = data[datasourceName];
+    if (!ds || !ds.rows) return [];
+    const columns = ds.columns;
+    return ds.rows.map(row => {
+      const obj = {};
+      columns.forEach((col, idx) => {
+        obj[col] = row[idx];
+      });
+      return obj;
+    });
+  }
+
+  try {
+    const data = await window.ReportApp.refresh({});
+    console.log('Data received:', data);
+    const rows = extractRows(data, 'universe');
+    console.log('Rows extracted:', rows);
+    
+    // Hide loading, show canvas
+    loadingEl.style.display = 'none';
+    canvas.style.display = 'block';
+    
+    // Build nodes
+    const nodes = {};
+    const edges = [];
+
+    rows.forEach(r => {
+      if (!nodes[r.seeker_id]) {
+        nodes[r.seeker_id] = {
+          id: r.seeker_id,
+          profile: r.seeker_profile_id,
+          x: Math.random() * W,
+          y: Math.random() * H,
+          vx: 0,
+          vy: 0,
+          programId: r.program_numeric_id,
+          programName: r.program_name,
+          goals: r.goals,
+          notes: r.notes,
+          activity: r.activity,
+          brightness: (r.goals + r.notes + r.activity) || 1,
+          referrals: []
+        };
+      }
+
+      if (r.referral_id) {
+        edges.push({
+          from: r.seeker_id,
+          to: r.program_numeric_id,
+          status: r.latest_status,
+          speed: r.days_to_latest_status || 1
+        });
+      }
+    });
+
+    // Create program nodes as gravity wells
+    const programs = {};
+    rows.forEach(r => {
+      if (!programs[r.program_numeric_id] && r.program_numeric_id != null) {
+        programs[r.program_numeric_id] = {
+          id: r.program_numeric_id,
+          name: r.program_name,
+          x: W/2 + (Math.random() - 0.5) * 400,
+          y: H/2 + (Math.random() - 0.5) * 400
+        };
+      }
+    });
+
+    // Physics constants
+    const FRICTION = 0.92;
+    const SPRING = 0.0008;
+    const GRAVITY = 0.0009;
+    
+    // View transformation state
+    let viewScale = 1.0;
+    let viewX = 0;
+    let viewY = 0;
+    let isPanning = false;
+    let panStartX = 0;
+    let panStartY = 0;
+    let isDraggingNode = false;
+    let draggedNode = null;
+    let physicsEnabled = true;
+    
+    // Transform coordinates from screen to world
+    function screenToWorld(sx, sy) {
+      return {
+        x: (sx - viewX) / viewScale,
+        y: (sy - viewY) / viewScale
+      };
+    }
+    
+    // Transform coordinates from world to screen
+    function worldToScreen(wx, wy) {
+      return {
+        x: wx * viewScale + viewX,
+        y: wy * viewScale + viewY
+      };
+    }
+    
+    // Update status display
+    function updateStatus() {
+      document.getElementById('status').textContent = 
+        `Zoom: ${viewScale.toFixed(2)}x | ` +
+        `Pan: (${Math.round(viewX)}, ${Math.round(viewY)}) | ` +
+        (physicsEnabled ? 'Physics: ON' : 'Physics: PAUSED') + ' | ' +
+        'Drag background to pan | Drag nodes to reposition';
+    }
+    
+    // Reset view to default
+    function resetView() {
+      viewScale = 1.0;
+      viewX = 0;
+      viewY = 0;
+      updateStatus();
+    }
+    
+    // Center view on all nodes
+    function centerView() {
+      if (Object.keys(nodes).length === 0) return;
+      
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      
+      // Include programs in bounds
+      Object.values(programs).forEach(p => {
+        minX = Math.min(minX, p.x);
+        maxX = Math.max(maxX, p.x);
+        minY = Math.min(minY, p.y);
+        maxY = Math.max(maxY, p.y);
+      });
+      
+      // Include seekers in bounds
+      Object.values(nodes).forEach(n => {
+        minX = Math.min(minX, n.x);
+        maxX = Math.max(maxX, n.x);
+        minY = Math.min(minY, n.y);
+        maxY = Math.max(maxY, n.y);
+      });
+      
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      const width = maxX - minX;
+      const height = maxY - minY;
+      
+      // Calculate scale to fit everything with some margin
+      const scaleX = W / (width + 200);
+      const scaleY = H / (height + 200);
+      viewScale = Math.min(scaleX, scaleY, 1.0);
+      
+      // Center the view
+      viewX = W/2 - centerX * viewScale;
+      viewY = H/2 - centerY * viewScale;
+      
+      updateStatus();
+    }
+    
+    function step() {
+      if (!physicsEnabled) return;
+      
+      // Apply gravity toward program nodes
+      Object.values(nodes).forEach(n => {
+        if (n === draggedNode) return; // Don't apply physics to dragged node
+        
+        const p = programs[n.programId];
+        if (!p) return;
+
+        const dx = p.x - n.x;
+        const dy = p.y - n.y;
+        n.vx += dx * GRAVITY;
+        n.vy += dy * GRAVITY;
+      });
+
+      // Apply spring forces for edges
+      edges.forEach(e => {
+        const a = nodes[e.from];
+        const b = programs[e.to];
+        if (!a || !b) return;
+
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        a.vx += dx * SPRING;
+        a.vy += dy * SPRING;
+      });
+
+      // Move nodes
+      Object.values(nodes).forEach(n => {
+        if (n === draggedNode) return; // Don't move dragged node
+        n.vx *= FRICTION;
+        n.vy *= FRICTION;
+        n.x += n.vx;
+        n.y += n.vy;
+      });
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      
+      // Save transformation state
+      ctx.save();
+      ctx.translate(viewX, viewY);
+      ctx.scale(viewScale, viewScale);
+
+      // Draw edges
+      edges.forEach(e => {
+        const a = nodes[e.from];
+        const b = programs[e.to];
+        if (!a || !b) return;
+
+        ctx.strokeStyle = e.status === 'Completed' ? '#34d39988'
+                        : e.status === 'In Progress' ? '#fbbf2488'
+                        : e.status === 'Cancelled' ? '#f8717188'
+                        : '#60a5fa88';
+
+        ctx.lineWidth = 1.2 / viewScale; // Adjust line width for zoom
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      });
+
+      // Draw program nodes
+      Object.values(programs).forEach(p => {
+        ctx.fillStyle = '#9ca3ff';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 8 / viewScale, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Draw seeker nodes
+      Object.values(nodes).forEach(n => {
+        const glow = Math.min(20, n.brightness * 2);
+        ctx.shadowBlur = glow / viewScale;
+        ctx.shadowColor = '#a78bfa';
+        ctx.fillStyle = '#c4b5fd';
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, (4 + Math.log(n.brightness + 1)) / viewScale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      });
+      
+      // Restore transformation
+      ctx.restore();
+    }
+    
+    // Find node at screen coordinates
+    function findNodeAtScreen(sx, sy) {
+      const worldPos = screenToWorld(sx, sy);
+      const searchRadius = 20 / viewScale; // Larger hit area when zoomed out
+      
+      let found = null;
+      let minDist = Infinity;
+      
+      Object.values(nodes).forEach(n => {
+        const dx = n.x - worldPos.x;
+        const dy = n.y - worldPos.y;
+        const dist = dx*dx + dy*dy;
+        if (dist < searchRadius*searchRadius && dist < minDist) {
+          minDist = dist;
+          found = n;
+        }
+      });
+      
+      return found;
+    }
+
+    // Mouse event handlers
+    canvas.addEventListener('mousedown', evt => {
+      evt.preventDefault();
+      const worldPos = screenToWorld(evt.clientX, evt.clientY);
+      
+      // Check if clicking on a node
+      draggedNode = findNodeAtScreen(evt.clientX, evt.clientY);
+      if (draggedNode) {
+        isDraggingNode = true;
+        canvas.classList.add('node-dragging');
+        // Reset velocity when dragging starts
+        draggedNode.vx = 0;
+        draggedNode.vy = 0;
+        return;
+      }
+      
+      // Otherwise start panning
+      isPanning = true;
+      panStartX = evt.clientX - viewX;
+      panStartY = evt.clientY - viewY;
+      canvas.classList.add('dragging');
+    });
+    
+    canvas.addEventListener('mousemove', evt => {
+      if (isDraggingNode && draggedNode) {
+        // Drag the node to new position
+        const worldPos = screenToWorld(evt.clientX, evt.clientY);
+        draggedNode.x = worldPos.x;
+        draggedNode.y = worldPos.y;
+        draggedNode.vx = 0;
+        draggedNode.vy = 0;
+      } else if (isPanning) {
+        // Pan the view
+        viewX = evt.clientX - panStartX;
+        viewY = evt.clientY - panStartY;
+        updateStatus();
+      }
+    });
+    
+    canvas.addEventListener('mouseup', evt => {
+      isPanning = false;
+      isDraggingNode = false;
+      draggedNode = null;
+      canvas.classList.remove('dragging');
+      canvas.classList.remove('node-dragging');
+    });
+    
+    canvas.addEventListener('mouseleave', evt => {
+      isPanning = false;
+      isDraggingNode = false;
+      draggedNode = null;
+      canvas.classList.remove('dragging');
+      canvas.classList.remove('node-dragging');
+    });
+    
+    // Click detection (for showing info panel)
+    canvas.addEventListener('click', evt => {
+      // Only show panel if we didn't just drag
+      if (isDraggingNode) return;
+      
+      const found = findNodeAtScreen(evt.clientX, evt.clientY);
+      const panel = document.getElementById('infoPanel');
+      if (found) {
+        panel.style.display = 'block';
+        panel.innerHTML = `
+          <h2>Seeker ${found.id}</h2>
+          <div class="row"><strong>Profile:</strong> ${found.profile}</div>
+          <div class="row"><strong>Program:</strong> ${found.programName}</div>
+          <div class="row"><strong>Goals:</strong> ${found.goals}</div>
+          <div class="row"><strong>Notes:</strong> ${found.notes}</div>
+          <div class="row"><strong>Activity:</strong> ${found.activity}</div>
+        `;
+      } else {
+        panel.style.display = 'none';
+      }
+    });
+    
+    // Zoom with mouse wheel
+    canvas.addEventListener('wheel', evt => {
+      evt.preventDefault();
+      
+      const zoomIntensity = 0.1;
+      const worldPos = screenToWorld(evt.clientX, evt.clientY);
+      
+      // Calculate new scale
+      const wheelDelta = evt.deltaY > 0 ? -1 : 1;
+      const newScale = viewScale * Math.exp(wheelDelta * zoomIntensity);
+      
+      // Clamp scale
+      viewScale = Math.max(0.1, Math.min(10, newScale));
+      
+      // Adjust pan so zoom centers on mouse position
+      viewX = evt.clientX - worldPos.x * viewScale;
+      viewY = evt.clientY - worldPos.y * viewScale;
+      
+      updateStatus();
+    });
+    
+    // Touch event handlers for mobile
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartViewX = 0;
+    let touchStartViewY = 0;
+    let touchStartTime = 0;
+    let lastTouchDistance = 0;
+    
+    canvas.addEventListener('touchstart', evt => {
+      evt.preventDefault();
+      if (evt.touches.length === 1) {
+        // Single touch - start pan or check for node drag
+        const touch = evt.touches[0];
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+        touchStartViewX = viewX;
+        touchStartViewY = viewY;
+        touchStartTime = Date.now();
+        
+        // Check if touching a node
+        draggedNode = findNodeAtScreen(touch.clientX, touch.clientY);
+        if (draggedNode) {
+          isDraggingNode = true;
+          canvas.classList.add('node-dragging');
+          draggedNode.vx = 0;
+          draggedNode.vy = 0;
+        } else {
+          isPanning = true;
+          canvas.classList.add('dragging');
+        }
+      } else if (evt.touches.length === 2) {
+        // Two touches - prepare for pinch zoom
+        const t1 = evt.touches[0];
+        const t2 = evt.touches[1];
+        lastTouchDistance = Math.hypot(
+          t2.clientX - t1.clientX,
+          t2.clientY - t1.clientY
+        );
+      }
+    });
+    
+    canvas.addEventListener('touchmove', evt => {
+      evt.preventDefault();
+      
+      if (isDraggingNode && draggedNode && evt.touches.length === 1) {
+        // Drag node
+        const touch = evt.touches[0];
+        const worldPos = screenToWorld(touch.clientX, touch.clientY);
+        draggedNode.x = worldPos.x;
+        draggedNode.y = worldPos.y;
+        draggedNode.vx = 0;
+        draggedNode.vy = 0;
+      } else if (isPanning && evt.touches.length === 1) {
+        // Pan with single touch
+        const touch = evt.touches[0];
+        viewX = touchStartViewX + (touch.clientX - touchStartX);
+        viewY = touchStartViewY + (touch.clientY - touchStartY);
+        updateStatus();
+      } else if (evt.touches.length === 2) {
+        // Pinch zoom
+        const t1 = evt.touches[0];
+        const t2 = evt.touches[1];
+        const currentDistance = Math.hypot(
+          t2.clientX - t1.clientX,
+          t2.clientY - t1.clientY
+        );
+        
+        if (lastTouchDistance > 0) {
+          const centerX = (t1.clientX + t2.clientX) / 2;
+          const centerY = (t1.clientY + t2.clientY) / 2;
+          const worldPos = screenToWorld(centerX, centerY);
+          
+          // Calculate scale change
+          const scaleChange = currentDistance / lastTouchDistance;
+          viewScale = Math.max(0.1, Math.min(10, viewScale * scaleChange));
+          
+          // Adjust pan for zoom
+          viewX = centerX - worldPos.x * viewScale;
+          viewY = centerY - worldPos.y * viewScale;
+          updateStatus();
+        }
+        
+        lastTouchDistance = currentDistance;
+      }
+    });
+    
+    canvas.addEventListener('touchend', evt => {
+      evt.preventDefault();
+      
+      // Check for tap (quick touch)
+      if (Date.now() - touchStartTime < 300 && !isDraggingNode && !isPanning) {
+        const touch = evt.changedTouches[0];
+        const found = findNodeAtScreen(touch.clientX, touch.clientY);
+        const panel = document.getElementById('infoPanel');
+        if (found) {
+          panel.style.display = 'block';
+          panel.innerHTML = `
+            <h2>Seeker ${found.id}</h2>
+            <div class="row"><strong>Profile:</strong> ${found.profile}</div>
+            <div class="row"><strong>Program:</strong> ${found.programName}</div>
+            <div class="row"><strong>Goals:</strong> ${found.goals}</div>
+            <div class="row"><strong>Notes:</strong> ${found.notes}</div>
+            <div class="row"><strong>Activity:</strong> ${found.activity}</div>
+          `;
+        } else {
+          panel.style.display = 'none';
+        }
+      }
+      
+      // Reset state
+      isPanning = false;
+      isDraggingNode = false;
+      draggedNode = null;
+      canvas.classList.remove('dragging');
+      canvas.classList.remove('node-dragging');
+      
+      if (evt.touches.length === 0) {
+        lastTouchDistance = 0;
+      }
+    });
+    
+    canvas.addEventListener('touchcancel', evt => {
+      evt.preventDefault();
+      isPanning = false;
+      isDraggingNode = false;
+      draggedNode = null;
+      canvas.classList.remove('dragging');
+      canvas.classList.remove('node-dragging');
+      lastTouchDistance = 0;
+    });
+    
+    // Control button handlers
+    document.getElementById('resetZoom').addEventListener('click', resetView);
+    document.getElementById('centerView').addEventListener('click', centerView);
+    document.getElementById('togglePhysics').addEventListener('click', () => {
+      physicsEnabled = !physicsEnabled;
+      document.getElementById('togglePhysics').textContent = 
+        physicsEnabled ? 'Pause Physics' : 'Resume Physics';
+      updateStatus();
+    });
+    
+    // Keyboard shortcuts
+    window.addEventListener('keydown', evt => {
+      switch (evt.key) {
+        case 'r':
+        case 'R':
+          resetView();
+          break;
+        case 'c':
+        case 'C':
+          centerView();
+          break;
+        case ' ':
+          physicsEnabled = !physicsEnabled;
+          document.getElementById('togglePhysics').textContent = 
+            physicsEnabled ? 'Pause Physics' : 'Resume Physics';
+          updateStatus();
+          break;
+      }
+    });
+
+    // Initial view centering
+    centerView();
+    updateStatus();
+    
+    // Animation loop
+    function loop() {
+      step();
+      draw();
+      requestAnimationFrame(loop);
+    }
+    loop();
+    
+  } catch (err) {
+    console.error('Failed to load seeker universe:', err);
+    loadingEl.style.display = 'none';
+    errorEl.style.display = 'block';
+    errorEl.innerHTML = '<h3>Error loading data</h3><p>' + (err.message || err) + '</p>';
+  }
+})();
+</script>
+</body>
+</html>

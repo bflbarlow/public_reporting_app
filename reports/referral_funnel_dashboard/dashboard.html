@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Referral Funnel & Engagement</title>
+  <script src="/static/thick_client.js"></script>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 16px;
+      background: #0b1020;
+      color: #f5f5f5;
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 24px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 2fr 1.5fr;
+      grid-gap: 16px;
+      margin-top: 16px;
+    }
+    .card {
+      background: #151a30;
+      border-radius: 8px;
+      padding: 12px 16px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+    }
+    .card h2 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: #9ca3ff;
+    }
+    .pill-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+    .pill {
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #1f2937;
+      color: #e5e7eb;
+    }
+    .pill strong {
+      color: #a5b4fc;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+    th, td {
+      padding: 4px 6px;
+      text-align: left;
+      border-bottom: 1px solid #1f2937;
+    }
+    th {
+      color: #9ca3ff;
+      font-weight: 600;
+    }
+    .status-created { color: #60a5fa; }
+    .status-in-progress { color: #fbbf24; }
+    .status-completed { color: #34d399; }
+    .status-cancelled { color: #f87171; }
+    .kpi-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .kpi {
+      flex: 1 1 120px;
+      background: #111827;
+      border-radius: 6px;
+      padding: 8px;
+    }
+    .kpi-label {
+      font-size: 11px;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .kpi-value {
+      font-size: 18px;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 8px;
+      font-size: 12px;
+    }
+    .controls input {
+      background: #111827;
+      border: 1px solid #374151;
+      border-radius: 4px;
+      padding: 4px 6px;
+      color: #e5e7eb;
+    }
+    .controls button {
+      background: #4f46e5;
+      border: none;
+      border-radius: 4px;
+      padding: 6px 10px;
+      color: white;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .controls button:hover {
+      background: #6366f1;
+    }
+  </style>
+</head>
+<body>
+  <h1>Referral Funnel & Engagement</h1>
+  <div class="controls">
+    <span>Window:</span>
+    <input type="date" id="start_date" />
+    <span>to</span>
+    <input type="date" id="end_date" />
+    <button id="apply">Refresh</button>
+    <span id="status" style="opacity:0.7;margin-left:8px;"></span>
+  </div>
+
+  <div class="grid">
+    <div class="card" id="funnel-card">
+      <h2>Referral Funnel by Program</h2>
+      <div class="kpi-row" id="funnel-kpis"></div>
+      <table id="funnel-table">
+        <thead>
+          <tr>
+            <th>Program</th>
+            <th>Total</th>
+            <th>Created</th>
+            <th>In Progress</th>
+            <th>Completed</th>
+            <th>Cancelled</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card" id="velocity-card">
+      <h2>Referral Velocity</h2>
+      <div class="kpi-row" id="velocity-kpis"></div>
+      <table id="velocity-table">
+        <thead>
+          <tr>
+            <th>Program</th>
+            <th>Referral</th>
+            <th>Days to Latest Status</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <h2>Top Engaged Seekers</h2>
+    <table id="engagement-table">
+      <thead>
+        <tr>
+          <th>Seeker</th>
+          <th>Goals</th>
+          <th>Notes</th>
+          <th>Activity Events</th>
+          <th>First Activity</th>
+          <th>Last Activity</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    function fmt(n) {
+      return n == null ? '–' : Number(n).toLocaleString();
+    }
+
+    function setStatus(msg) {
+      const el = document.getElementById('status');
+      el.textContent = msg;
+    }
+
+function normalizeData(data) {
+  const normalized = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value && typeof value === 'object' && Array.isArray(value.columns) && Array.isArray(value.rows)) {
+      // Convert columns/rows to array of objects
+      const columns = value.columns;
+      const rows = value.rows;
+      normalized[key] = rows.map(row => {
+        const obj = {};
+        columns.forEach((col, idx) => {
+          obj[col] = row[idx];
+        });
+        return obj;
+      });
+    } else {
+      // Already normalized or unknown format
+      normalized[key] = value;
+    }
+  }
+  return normalized;
+}
+
+async function loadData(params, retryCount = 0) {
+  setStatus('Loading…');
+  if (!window.ReportApp || !window.ReportApp.refresh) {
+    setStatus('Error: Thick client not loaded');
+    console.error('window.ReportApp.refresh not available');
+    return {};
+  }
+  
+  try {
+    const data = await window.ReportApp.refresh(params);
+    setStatus('Updated at ' + new Date().toLocaleTimeString());
+    // Normalize data from server format (columns/rows) to array of objects
+    return normalizeData(data);
+  } catch (error) {
+    console.error('Refresh failed:', error);
+    // If it's a config error and we haven't retried too many times, retry after delay
+    if (error.message && error.message.includes('currentUrl') && retryCount < 3) {
+      console.log(`Retrying loadData (attempt ${retryCount + 1})...`);
+      await new Promise(resolve => setTimeout(resolve, 300 * (retryCount + 1)));
+      return loadData(params, retryCount + 1);
+    }
+    setStatus('Error loading data');
+    throw error;
+  }
+}
+
+    function renderFunnel(rows) {
+      console.log('renderFunnel called with:', rows);
+      // Handle various data structures
+      if (!rows) rows = [];
+      if (typeof rows === 'object' && !Array.isArray(rows)) {
+        // Try common structures
+        if (Array.isArray(rows.rows)) rows = rows.rows;
+        else if (Array.isArray(rows.data)) rows = rows.data;
+        else if (Array.isArray(rows.result)) rows = rows.result;
+        else rows = [];
+      }
+      if (!Array.isArray(rows)) {
+        console.error('renderFunnel: rows is not an array:', rows);
+        rows = [];
+      }
+      const tbody = document.querySelector('#funnel-table tbody');
+      tbody.innerHTML = '';
+
+      let total = 0, completed = 0, cancelled = 0;
+
+      rows.forEach(r => {
+        total += r.total_referrals || 0;
+        completed += r.completed_count || 0;
+        cancelled += r.cancelled_count || 0;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${r.program_name || r.program_numeric_id}</td>
+          <td>${fmt(r.total_referrals)}</td>
+          <td class="status-created">${fmt(r.created_count)}</td>
+          <td class="status-in-progress">${fmt(r.in_progress_count)}</td>
+          <td class="status-completed">${fmt(r.completed_count)}</td>
+          <td class="status-cancelled">${fmt(r.cancelled_count)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      const kpis = document.getElementById('funnel-kpis');
+      kpis.innerHTML = '';
+      const completionRate = total ? (completed / total * 100).toFixed(1) + '%' : '–';
+      const cancelRate = total ? (cancelled / total * 100).toFixed(1) + '%' : '–';
+
+      kpis.innerHTML = `
+        <div class="kpi">
+          <div class="kpi-label">Total Referrals</div>
+          <div class="kpi-value">${fmt(total)}</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Completion Rate</div>
+          <div class="kpi-value">${completionRate}</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Cancellation Rate</div>
+          <div class="kpi-value">${cancelRate}</div>
+        </div>
+      `;
+    }
+
+    function renderVelocity(rows) {
+      console.log('renderVelocity called with:', rows);
+      // Handle various data structures
+      if (!rows) rows = [];
+      if (typeof rows === 'object' && !Array.isArray(rows)) {
+        // Try common structures
+        if (Array.isArray(rows.rows)) rows = rows.rows;
+        else if (Array.isArray(rows.data)) rows = rows.data;
+        else if (Array.isArray(rows.result)) rows = rows.result;
+        else rows = [];
+      }
+      if (!Array.isArray(rows)) {
+        console.error('renderVelocity: rows is not an array:', rows);
+        rows = [];
+      }
+      const tbody = document.querySelector('#velocity-table tbody');
+      tbody.innerHTML = '';
+
+      let sumDays = 0;
+      let count = 0;
+
+      rows.forEach(r => {
+        const days = r.days_to_latest_status;
+        if (days != null) {
+          sumDays += days;
+          count++;
+        }
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${r.program_name}</td>
+          <td>${r.referral_id}</td>
+          <td>${days == null ? '–' : days}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      const avg = count ? (sumDays / count).toFixed(1) : '–';
+      const kpis = document.getElementById('velocity-kpis');
+      kpis.innerHTML = `
+        <div class="kpi">
+          <div class="kpi-label">Referrals Measured</div>
+          <div class="kpi-value">${fmt(count)}</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Avg Days to Latest Status</div>
+          <div class="kpi-value">${avg}</div>
+        </div>
+      `;
+    }
+
+    function renderEngagement(rows) {
+      console.log('renderEngagement called with:', rows);
+      // Handle various data structures
+      if (!rows) rows = [];
+      if (typeof rows === 'object' && !Array.isArray(rows)) {
+        // Try common structures
+        if (Array.isArray(rows.rows)) rows = rows.rows;
+        else if (Array.isArray(rows.data)) rows = rows.data;
+        else if (Array.isArray(rows.result)) rows = rows.result;
+        else rows = [];
+      }
+      if (!Array.isArray(rows)) {
+        console.error('renderEngagement: rows is not an array:', rows);
+        rows = [];
+      }
+      const tbody = document.querySelector('#engagement-table tbody');
+      tbody.innerHTML = '';
+
+      rows.forEach(r => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${r.seeker_id} / ${r.seeker_profile_id}</td>
+          <td>${fmt(r.goals_count)}</td>
+          <td>${fmt(r.notes_count)}</td>
+          <td>${fmt(r.activity_events)}</td>
+          <td>${r.first_activity_date || '–'}</td>
+          <td>${r.last_activity_date || '–'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    let bootstrapCalled = false;
+    async function bootstrap() {
+      if (bootstrapCalled) return;
+      bootstrapCalled = true;
+      
+      console.log('window.ReportApp:', window.ReportApp);
+      const params = window.ReportApp ? window.ReportApp.getParams() : {};
+      console.log('Initial params:', params);
+      const startInput = document.getElementById('start_date');
+      const endInput = document.getElementById('end_date');
+
+      if (params.start_date) startInput.value = params.start_date;
+      if (params.end_date) endInput.value = params.end_date;
+
+      const data = await loadData({});
+      console.log('Data received:', data);
+      console.log('referral_funnel:', data.referral_funnel, 'type:', typeof data.referral_funnel);
+      console.log('referral_velocity:', data.referral_velocity, 'type:', typeof data.referral_velocity);
+      console.log('seeker_engagement:', data.seeker_engagement, 'type:', typeof data.seeker_engagement);
+      renderFunnel(data.referral_funnel || []);
+      renderVelocity(data.referral_velocity || []);
+      renderEngagement(data.seeker_engagement || []);
+
+      document.getElementById('apply').addEventListener('click', async () => {
+        const newParams = {
+          start_date: startInput.value,
+          end_date: endInput.value
+        };
+        const refreshed = await loadData(newParams);
+        renderFunnel(refreshed.referral_funnel || []);
+        renderVelocity(refreshed.referral_velocity || []);
+        renderEngagement(refreshed.seeker_engagement || []);
+      });
+    }
+
+    // Wait for thick client to be ready with timeout
+    function isReportAppReady() {
+      // Check if ReportApp exists and has required methods
+      if (!window.ReportApp || typeof window.ReportApp.getParams !== 'function' || typeof window.ReportApp.refresh !== 'function') {
+        return false;
+      }
+      
+      // Check if params are actually loaded
+      // We expect at least organization_id to be present (immutable param)
+      const params = window.ReportApp.getParams();
+      const hasRequiredParams = params && params.organization_id;
+      
+      if (hasRequiredParams) {
+        console.log('ReportApp ready with params:', params);
+        return true;
+      }
+      
+      // Optional: also check if config is loaded by trying to get a param we know should exist
+      // For this report, organization_id is immutable and always present
+      return false;
+    }
+
+    function startPolling() {
+      console.log('Polling for ReportApp...');
+      const interval = setInterval(() => {
+        if (isReportAppReady()) {
+          clearInterval(interval);
+          bootstrap();
+        }
+      }, 100);
+      
+      // Timeout after 5 seconds
+      setTimeout(() => {
+        clearInterval(interval);
+        if (!window.ReportApp) {
+          console.error('ReportApp not available after timeout');
+          setStatus('Error: Thick client not loaded');
+        } else if (!isReportAppReady()) {
+          console.error('ReportApp available but not initialized properly');
+          setStatus('Error: Thick client not initialized');
+        }
+      }, 5000);
+    }
+
+    // First try immediately
+    if (isReportAppReady()) {
+      bootstrap();
+    } else if (window.ReportApp && window.ReportApp.on) {
+      // Try listening for ready event if available
+      console.log('Setting up ready event listener');
+      window.ReportApp.on('ready', bootstrap);
+      // Check again in case event fired between initial check and listener setup
+      setTimeout(() => {
+        if (isReportAppReady()) {
+          bootstrap();
+        }
+      }, 0);
+    } else {
+      // Poll until ready
+      startPolling();
+    }
+  </script>
+</body>
+</html>

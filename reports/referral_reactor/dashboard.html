@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Referral Reactor Core</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: radial-gradient(circle at center, #0a0a15, #000);
+      font-family: system-ui, sans-serif;
+      color: #fff;
+    }
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #9ca3ff;
+      font-size: 18px;
+    }
+    #error {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.8);
+      color: #f87171;
+      padding: 20px;
+      border-radius: 8px;
+      max-width: 80%;
+    }
+    #info {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(0,0,0,0.45);
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      backdrop-filter: blur(6px);
+    }
+    #info h2 {
+      margin: 0 0 6px 0;
+      font-size: 16px;
+      color: #9ca3ff;
+    }
+    .control-btn {
+      background: rgba(0,0,0,0.45);
+      border: 1px solid #333;
+      border-radius: 6px;
+      color: #9ca3ff;
+      padding: 8px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      backdrop-filter: blur(6px);
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .control-btn:hover {
+      background: rgba(60, 60, 100, 0.7);
+      border-color: #636efa;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      background: rgba(0,0,0,0.45);
+      padding: 10px;
+      border-radius: 8px;
+      backdrop-filter: blur(6px);
+      border: 1px solid #333;
+    }
+    .control-label {
+      font-size: 11px;
+      color: #9ca3ff;
+      margin-bottom: 2px;
+    }
+    .control-value {
+      font-size: 12px;
+      color: #c4b5fd;
+      text-align: center;
+      margin-top: 4px;
+    }
+    .slider-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    input[type="range"] {
+      flex: 1;
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(60, 60, 100, 0.3);
+      outline: none;
+      -webkit-appearance: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #9ca3ff;
+      cursor: pointer;
+      border: 2px solid #c4b5fd;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #9ca3ff;
+      cursor: pointer;
+      border: 2px solid #c4b5fd;
+      border: none;
+    }
+    #tooltip {
+      position: absolute;
+      display: none;
+      background: rgba(0,0,0,0.85);
+      border: 1px solid #636efa;
+      border-radius: 8px;
+      padding: 12px;
+      color: #d0d0ff;
+      font-size: 12px;
+      line-height: 1.4;
+      max-width: 280px;
+      z-index: 1000;
+      backdrop-filter: blur(6px);
+      pointer-events: none;
+    }
+    #tooltip h3 {
+      margin: 0 0 6px 0;
+      font-size: 13px;
+      color: #9ca3ff;
+    }
+    #tooltip .row {
+      margin-bottom: 4px;
+    }
+    #tooltip strong {
+      color: #a5b4fc;
+    }
+    canvas {
+      cursor: default;
+    }
+    canvas.panning {
+      cursor: grabbing;
+    }
+    canvas.zooming {
+      cursor: zoom-in;
+    }
+  </style>
+  <script src="/static/thick_client.js"></script>
+</head>
+<body>
+
+<div id="loading">Loading referral reactor...</div>
+<div id="error" style="display: none;"></div>
+<canvas id="reactor" style="display: none;"></canvas>
+<div id="info"></div>
+<div id="controls" style="position: absolute; top: 20px; right: 20px; display: flex; flex-direction: column; gap: 12px; z-index: 100;">
+  <div class="control-group">
+    <div class="control-label">Animation Speed</div>
+    <div class="slider-container">
+      <span style="color: #9ca3ff; font-size: 12px;">0.1x</span>
+      <input type="range" id="speedSlider" min="0.1" max="3.0" step="0.1" value="0.5">
+      <span style="color: #9ca3ff; font-size: 12px;">3.0x</span>
+    </div>
+    <div id="speedValue" class="control-value">1.0x</div>
+  </div>
+  
+  <div class="control-group">
+    <div class="control-label">Zoom & Pan</div>
+    <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+      <button id="zoomInBtn" class="control-btn" title="Zoom In (or use Mouse Wheel)">+</button>
+      <button id="zoomOutBtn" class="control-btn" title="Zoom Out (or use Mouse Wheel)">-</button>
+      <button id="resetViewBtn" class="control-btn" title="Reset View (R)">Reset</button>
+    </div>
+    <div style="display: flex; gap: 6px;">
+      <button id="pauseBtn" class="control-btn" title="Pause/Resume Animation (Space)">Pause</button>
+    </div>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+<div id="status" style="position: absolute; bottom: 20px; left: 20px; color: #9ca3ff; font-size: 12px; background: rgba(0,0,0,0.4); padding: 6px 10px; border-radius: 4px;">
+  Animation: Running | Zoom: 1.00x | Pan: (0, 0) | Speed: 0.5x | Hover particles for details
+</div>
+
+<script defer>
+
+(async function() {
+  // Check for thick client
+  if (!window.ReportApp) {
+    console.error('ReportApp not loaded');
+    document.getElementById('error').style.display = 'block';
+    document.getElementById('error').innerHTML = '<h3>Error</h3><p>Thick client not loaded</p>';
+    document.getElementById('loading').style.display = 'none';
+    return;
+  }
+  
+  // Wait for ReportApp to be ready
+  if (!window.ReportApp.getParams) {
+    await new Promise(resolve => window.ReportApp.on('ready', resolve));
+  }
+  
+  // Ensure ReportConfig is available (injected by reporting_app)
+  if (!window.ReportConfig) {
+    console.log('Waiting for ReportConfig injection...');
+    await new Promise(resolve => {
+      const start = Date.now();
+      const check = () => {
+        if (window.ReportConfig) {
+          resolve();
+        } else if (Date.now() - start < 2000) {
+          setTimeout(check, 10);
+        } else {
+          console.error('ReportConfig not injected after 2 seconds');
+          resolve(); // Continue anyway, thick client might handle it
+        }
+      };
+      check();
+    });
+  }
+  
+  console.log('ReportConfig after wait:', window.ReportConfig);
+  
+  // Helper to extract rows from datasource response
+  function extractRows(data, datasourceName) {
+    const ds = data[datasourceName];
+    if (!ds || !ds.rows) return [];
+    const columns = ds.columns;
+    return ds.rows.map(row => {
+      const obj = {};
+      columns.forEach((col, idx) => {
+        obj[col] = row[idx];
+      });
+      return obj;
+    });
+  }
+
+  const canvas = document.getElementById('reactor');
+  const ctx = canvas.getContext('2d');
+  let W = canvas.width = window.innerWidth;
+  let H = canvas.height = window.innerHeight;
+
+  window.addEventListener('resize', () => {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    updateViewAfterResize();
+  });
+
+  try {
+    const data = await window.ReportApp.refresh({});
+    console.log('Data received:', data);
+    const rows = extractRows(data, 'reactor_data');
+    console.log('Rows extracted:', rows);
+    
+    // Hide loading, show canvas
+    document.getElementById('loading').style.display = 'none';
+    canvas.style.display = 'block';
+
+    // Group by program
+    const programs = {};
+    rows.forEach(r => {
+      if (!programs[r.program_numeric_id]) {
+        programs[r.program_numeric_id] = {
+          id: r.program_numeric_id,
+          name: r.program_name,
+          angle: Math.random() * Math.PI * 2,
+          radius: 120 + Math.random() * 200,
+          speed: 0.002 + Math.random() * 0.003,
+          particles: []
+        };
+      }
+      programs[r.program_numeric_id].particles.push(r);
+    });
+
+    // Interactive view system
+    let viewScale = 1.0;
+    let viewX = 0;
+    let viewY = 0;
+    let speedMultiplier = 0.5;
+    let isPanning = false;
+    let panStartX = 0;
+    let panStartY = 0;
+    let panStartViewX = 0;
+    let panStartViewY = 0;
+    let animationRunning = true;
+    let animationId = null;
+    let hoveredParticle = null;
+    let lastHoverTime = 0;
+    let particleTime = 0;
+    
+    // Transform coordinates from screen to world
+    function screenToWorld(sx, sy) {
+      return {
+        x: (sx - viewX) / viewScale,
+        y: (sy - viewY) / viewScale
+      };
+    }
+    
+    // Transform coordinates from world to screen
+    function worldToScreen(wx, wy) {
+      return {
+        x: wx * viewScale + viewX,
+        y: wy * viewScale + viewY
+      };
+    }
+    
+    // Update view after window resize
+    function updateViewAfterResize() {
+      // Adjust view to keep center point
+      const centerX = W / 2;
+      const centerY = H / 2;
+      const worldCenter = screenToWorld(centerX, centerY);
+      // Re-center
+      viewX = centerX - worldCenter.x * viewScale;
+      viewY = centerY - worldCenter.y * viewScale;
+      updateStatus();
+    }
+    
+    // Update status display
+    function updateStatus() {
+      const statusEl = document.getElementById('status');
+      if (statusEl) {
+        statusEl.textContent = 
+          `Animation: ${animationRunning ? 'Running' : 'Paused'} | ` +
+          `Zoom: ${viewScale.toFixed(2)}x | ` +
+          `Pan: (${Math.round(viewX)}, ${Math.round(viewY)}) | ` +
+          `Speed: ${speedMultiplier.toFixed(1)}x | ` +
+          `Hover particles for details`;
+      }
+      // Update speed value display
+      document.getElementById('speedValue').textContent = speedMultiplier.toFixed(1) + 'x';
+    }
+    
+    // Reset view to default
+    function resetView() {
+      viewScale = 1.0;
+      viewX = 0;
+      viewY = 0;
+      updateStatus();
+    }
+    
+    // Zoom at point
+    function zoomAt(centerX, centerY, factor) {
+      const worldPos = screenToWorld(centerX, centerY);
+      viewScale = Math.max(0.1, Math.min(10, viewScale * factor));
+      viewX = centerX - worldPos.x * viewScale;
+      viewY = centerY - worldPos.y * viewScale;
+      updateStatus();
+    }
+    
+    // Find particle at screen coordinates
+    function findParticleAtScreen(sx, sy) {
+      const worldPos = screenToWorld(sx, sy);
+      const searchRadius = 15 / viewScale; // Larger hit area when zoomed out
+      
+      let found = null;
+      let minDist = Infinity;
+      
+      // Check all programs
+      Object.values(programs).forEach(p => {
+        const programCenter = {
+          x: W/2 + Math.cos(p.angle) * p.radius,
+          y: H/2 + Math.sin(p.angle) * p.radius
+        };
+        
+        // Check particles in this program
+        p.particles.forEach((r, i) => {
+          const angle = (i / p.particles.length) * Math.PI * 2 + particleTime * 0.3;
+          const dist = 40 + (r.days_to_latest_status || 1) * 2;
+          
+          const particleWorldPos = {
+            x: programCenter.x + Math.cos(angle) * dist,
+            y: programCenter.y + Math.sin(angle) * dist
+          };
+          
+          const dx = particleWorldPos.x - worldPos.x;
+          const dy = particleWorldPos.y - worldPos.y;
+          const distance = dx*dx + dy*dy;
+          const particleRadius = (3 + Math.log((r.goals + r.notes + r.activity + 1))) / viewScale;
+          
+          if (distance < (searchRadius + particleRadius) * (searchRadius + particleRadius) && distance < minDist) {
+            minDist = distance;
+            found = { program: p, referral: r, index: i, programCenter, angle, dist };
+          }
+        });
+      });
+      
+      return found;
+    }
+    
+    // Show tooltip for particle
+    function showParticleTooltip(particleData, x, y) {
+      const tooltip = document.getElementById('tooltip');
+      if (!tooltip) return;
+      
+      const r = particleData.referral;
+      tooltip.innerHTML = `
+        <h3>Referral ${r.referral_id}</h3>
+        <div class="row"><strong>Seeker ID:</strong> ${r.seeker_id}</div>
+        <div class="row"><strong>Program:</strong> ${particleData.program.name}</div>
+        <div class="row"><strong>Status:</strong> ${r.latest_status || 'Unknown'}</div>
+        <div class="row"><strong>Duration:</strong> ${r.days_to_latest_status || 0} days</div>
+        <div class="row"><strong>Goals:</strong> ${r.goals}</div>
+        <div class="row"><strong>Notes:</strong> ${r.notes}</div>
+        <div class="row"><strong>Activity:</strong> ${r.activity}</div>
+        <div class="row"><strong>Total Engagement:</strong> ${r.goals + r.notes + r.activity}</div>
+      `;
+      
+      tooltip.style.display = 'block';
+      // Position tooltip near mouse but not off screen
+      let tipX = x + 15;
+      let tipY = y + 15;
+      const tipWidth = tooltip.offsetWidth;
+      const tipHeight = tooltip.offsetHeight;
+      
+      if (tipX + tipWidth > window.innerWidth) {
+        tipX = x - tipWidth - 15;
+      }
+      if (tipY + tipHeight > window.innerHeight) {
+        tipY = y - tipHeight - 15;
+      }
+      
+      tooltip.style.left = tipX + 'px';
+      tooltip.style.top = tipY + 'px';
+    }
+    
+    // Hide tooltip
+    function hideTooltip() {
+      const tooltip = document.getElementById('tooltip');
+      if (tooltip) {
+        tooltip.style.display = 'none';
+      }
+    }
+    
+    // Mouse event handlers
+    canvas.addEventListener('mousedown', evt => {
+      evt.preventDefault();
+      hoveredParticle = null;
+      hideTooltip();
+      
+      // Check if we clicked on a particle
+      const particle = findParticleAtScreen(evt.clientX, evt.clientY);
+      if (particle) {
+        // Clicked on particle - show tooltip immediately
+        showParticleTooltip(particle, evt.clientX, evt.clientY);
+        lastHoverTime = Date.now();
+        return;
+      }
+      
+      // Otherwise start panning
+      isPanning = true;
+      panStartX = evt.clientX;
+      panStartY = evt.clientY;
+      panStartViewX = viewX;
+      panStartViewY = viewY;
+      canvas.classList.add('panning');
+    });
+    
+    canvas.addEventListener('mousemove', evt => {
+      // Check for hover
+      const particle = findParticleAtScreen(evt.clientX, evt.clientY);
+      const now = Date.now();
+      
+      if (particle && !isPanning) {
+        if (particle !== hoveredParticle || now - lastHoverTime > 300) {
+          hoveredParticle = particle;
+          showParticleTooltip(particle, evt.clientX, evt.clientY);
+          lastHoverTime = now;
+        }
+      } else if (hoveredParticle && !isPanning) {
+        hoveredParticle = null;
+        hideTooltip();
+      }
+      
+      // Handle panning
+      if (isPanning) {
+        viewX = panStartViewX + (evt.clientX - panStartX);
+        viewY = panStartViewY + (evt.clientY - panStartY);
+        updateStatus();
+      }
+    });
+    
+    canvas.addEventListener('mouseup', evt => {
+      isPanning = false;
+      canvas.classList.remove('panning');
+    });
+    
+    canvas.addEventListener('mouseleave', evt => {
+      isPanning = false;
+      hoveredParticle = null;
+      hideTooltip();
+      canvas.classList.remove('panning');
+    });
+    
+    // Mouse wheel zoom
+    canvas.addEventListener('wheel', evt => {
+      evt.preventDefault();
+      const zoomIntensity = 0.1;
+      const zoomFactor = evt.deltaY > 0 ? 0.9 : 1.1;
+      zoomAt(evt.clientX, evt.clientY, zoomFactor);
+    });
+    
+    // Touch event handlers for mobile
+    let touchStartDistance = 0;
+    let touchStartScale = 1.0;
+    
+    canvas.addEventListener('touchstart', evt => {
+      evt.preventDefault();
+      if (evt.touches.length === 1) {
+        // Single touch - start pan or check for particle
+        const touch = evt.touches[0];
+        const particle = findParticleAtScreen(touch.clientX, touch.clientY);
+        if (particle) {
+          showParticleTooltip(particle, touch.clientX, touch.clientY);
+          lastHoverTime = Date.now();
+        } else {
+          isPanning = true;
+          panStartX = touch.clientX;
+          panStartY = touch.clientY;
+          panStartViewX = viewX;
+          panStartViewY = viewY;
+          canvas.classList.add('panning');
+        }
+      } else if (evt.touches.length === 2) {
+        // Two touches - prepare for pinch zoom
+        const t1 = evt.touches[0];
+        const t2 = evt.touches[1];
+        touchStartDistance = Math.hypot(
+          t2.clientX - t1.clientX,
+          t2.clientY - t1.clientY
+        );
+        touchStartScale = viewScale;
+      }
+    });
+    
+    canvas.addEventListener('touchmove', evt => {
+      evt.preventDefault();
+      
+      if (isPanning && evt.touches.length === 1) {
+        const touch = evt.touches[0];
+        viewX = panStartViewX + (touch.clientX - panStartX);
+        viewY = panStartViewY + (touch.clientY - panStartY);
+        updateStatus();
+      } else if (evt.touches.length === 2) {
+        // Pinch zoom
+        const t1 = evt.touches[0];
+        const t2 = evt.touches[1];
+        const currentDistance = Math.hypot(
+          t2.clientX - t1.clientX,
+          t2.clientY - t1.clientY
+        );
+        
+        if (touchStartDistance > 0) {
+          const centerX = (t1.clientX + t2.clientX) / 2;
+          const centerY = (t1.clientY + t2.clientY) / 2;
+          const scaleChange = currentDistance / touchStartDistance;
+          viewScale = Math.max(0.1, Math.min(10, touchStartScale * scaleChange));
+          
+          // Adjust pan for zoom
+          const worldPos = screenToWorld(centerX, centerY);
+          viewX = centerX - worldPos.x * viewScale;
+          viewY = centerY - worldPos.y * viewScale;
+          updateStatus();
+        }
+      }
+    });
+    
+    canvas.addEventListener('touchend', evt => {
+      evt.preventDefault();
+      isPanning = false;
+      canvas.classList.remove('panning');
+      touchStartDistance = 0;
+      
+      // Hide tooltip after delay if no touch
+      setTimeout(() => {
+        if (!evt.touches.length) {
+          hideTooltip();
+        }
+      }, 500);
+    });
+    
+    // Control event handlers
+    document.getElementById('pauseBtn').addEventListener('click', () => {
+      animationRunning = !animationRunning;
+      document.getElementById('pauseBtn').textContent = animationRunning ? 'Pause' : 'Resume';
+      updateStatus();
+      
+      if (animationRunning && !animationId) {
+        loop();
+      }
+    });
+    
+    document.getElementById('speedSlider').addEventListener('input', (evt) => {
+      speedMultiplier = parseFloat(evt.target.value);
+      updateStatus();
+    });
+    
+    document.getElementById('zoomInBtn').addEventListener('click', () => {
+      zoomAt(W/2, H/2, 1.2);
+    });
+    
+    document.getElementById('zoomOutBtn').addEventListener('click', () => {
+      zoomAt(W/2, H/2, 0.8);
+    });
+    
+    document.getElementById('resetViewBtn').addEventListener('click', resetView);
+    
+    // Keyboard shortcuts
+    window.addEventListener('keydown', (evt) => {
+      switch (evt.key) {
+        case ' ':
+          evt.preventDefault();
+          document.getElementById('pauseBtn').click();
+          break;
+        case 'r':
+        case 'R':
+          resetView();
+          break;
+        case '+':
+        case '=':
+          zoomAt(W/2, H/2, 1.2);
+          break;
+        case '-':
+        case '_':
+          zoomAt(W/2, H/2, 0.8);
+          break;
+      }
+    });
+    
+    // Particle colors by status
+    const STATUS_COLOR = {
+      "Created": "#60a5fa",
+      "In Progress": "#fbbf24",
+      "Completed": "#34d399",
+      "Cancelled": "#f87171"
+    };
+
+    function drawCore(totalHeat) {
+      const pulse = 20 + Math.sin(Date.now() / 300) * 10 + totalHeat * 0.2;
+
+      const gradient = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, pulse * 4);
+      gradient.addColorStop(0, "#a78bfa");
+      gradient.addColorStop(1, "transparent");
+
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(W/2, H/2, pulse * 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawProgramRing(p) {
+      const x = W/2 + Math.cos(p.angle) * p.radius;
+      const y = H/2 + Math.sin(p.angle) * p.radius;
+
+      ctx.strokeStyle = "#9ca3ff55";
+      ctx.lineWidth = 3 / viewScale;
+      ctx.beginPath();
+      ctx.arc(x, y, 20 / viewScale, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = "#c4b5fd";
+      ctx.beginPath();
+      ctx.arc(x, y, 6 / viewScale, 0, Math.PI * 2);
+      ctx.fill();
+
+      return { x, y };
+    }
+
+    function drawParticles(p, origin) {
+      p.particles.forEach((r, i) => {
+        const angle = (i / p.particles.length) * Math.PI * 2 + particleTime * 0.3;
+        const dist = 40 + (r.days_to_latest_status || 1) * 2;
+
+        const x = origin.x + Math.cos(angle) * dist;
+        const y = origin.y + Math.sin(angle) * dist;
+
+        ctx.fillStyle = STATUS_COLOR[r.latest_status] || "#60a5fa";
+        ctx.beginPath();
+        ctx.arc(x, y, (3 + Math.log((r.goals + r.notes + r.activity + 1))) / viewScale, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    function loop() {
+      ctx.clearRect(0, 0, W, H);
+      
+      // Save transformation state
+      ctx.save();
+      ctx.translate(viewX, viewY);
+      ctx.scale(viewScale, viewScale);
+
+      // Update angles if animation is running
+      if (animationRunning) {
+        Object.values(programs).forEach(p => {
+          p.angle += p.speed * speedMultiplier;
+        });
+        // Update particle time for the outer particles (quarter speed relative to animation speed)
+        particleTime += 0.016 * speedMultiplier * 0.25;
+      }
+
+      let totalHeat = 0;
+      rows.forEach(r => totalHeat += (r.goals + r.notes + r.activity));
+
+      drawCore(totalHeat);
+
+      Object.values(programs).forEach(p => {
+        const origin = drawProgramRing(p);
+        drawParticles(p, origin);
+      });
+      
+      // Restore transformation
+      ctx.restore();
+
+      // Continue animation loop only if running
+      if (animationRunning) {
+        animationId = requestAnimationFrame(loop);
+      } else {
+        animationId = null;
+      }
+    }
+
+    // Initial setup
+    resetView();
+    updateStatus();
+    loop();
+    
+  } catch (err) {
+    console.error('Failed to load referral reactor:', err);
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error').style.display = 'block';
+    document.getElementById('error').innerHTML = '<h3>Error loading data</h3><p>' + (err.message || err) + '</p>';
+  }
+})();
+
+</script>
+
+</body>
+</html>

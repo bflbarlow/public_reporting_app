@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Value Parameter Test (ClassicModels)</title>
+    <script src="/static/thick_client.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            background: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #2c3e50; margin-bottom: 8px; }
+        h2 { color: #34495e; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #e0e0e0; }
+        .subtitle { color: #7f8c8d; margin-bottom: 24px; }
+
+        /* Param display */
+        .params-panel {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .param-row {
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .param-group {
+            flex: 1;
+            min-width: 250px;
+        }
+        .param-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #2c3e50;
+        }
+        .param-group small {
+            display: block;
+            margin-top: 4px;
+            color: #95a5a6;
+            font-size: 12px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+        .badge-immutable { background: #ffeaa7; color: #d35400; }
+        .badge-mutable { background: #a29bfe; color: #2d3436; }
+        .badge-multi { background: #fd79a8; color: white; }
+
+        input, select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #636efa;
+        }
+        input[readonly] {
+            background: #f8f9fa;
+            color: #6c757d;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #636efa;
+            color: white;
+        }
+        .btn-primary:hover:not(:disabled) {
+            background: #4a55d4;
+        }
+        .btn-primary:disabled {
+            background: #b0b0b0;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+            margin-left: 8px;
+        }
+        .btn-secondary:hover:not(:disabled) {
+            background: #7f8c8d;
+        }
+        .btn-secondary:disabled {
+            background: #d0d0d0;
+            cursor: not-allowed;
+        }
+        .actions {
+            margin-top: 16px;
+        }
+
+        /* Stats cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: 800;
+            color: #636efa;
+            margin-bottom: 4px;
+        }
+        .stat-label {
+            font-size: 13px;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Tables */
+        .data-panel {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        th {
+            background: #f8f9fa;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #2c3e50;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        tr:hover td {
+            background: #f8f9fa;
+        }
+
+        /* Loading / Error */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+            font-size: 16px;
+        }
+        .error {
+            background: #fee;
+            border-left: 4px solid #e74c3c;
+            padding: 16px;
+            border-radius: 6px;
+            margin-bottom: 24px;
+            color: #c0392b;
+        }
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #95a5a6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Multi-Value Parameter Test (ClassicModels)</h1>
+        <p class="subtitle">Tests multi-value parameters for both immutable (country) and mutable (productLine) using the classicmodels scale car database.</p>
+
+        <!-- Parameters Panel -->
+        <div class="params-panel">
+            <h2>Parameters</h2>
+            <div class="param-row">
+                <div class="param-group">
+                    <label>
+                        Country
+                        <span class="badge badge-immutable">Immutable</span>
+                        <span class="badge badge-multi">Multi-Value</span>
+                    </label>
+                    <div id="country-display" style="padding: 10px 12px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px; color: #6c757d; background: #f8f9fa; min-height: 42px;">
+                        <span id="country-values">Loading...</span>
+                    </div>
+                    <small>Cannot be changed once URL is signed. Supports multiple countries.</small>
+                </div>
+                <div class="param-group">
+                    <label>
+                        Product Line Filter
+                        <span class="badge badge-mutable">Mutable</span>
+                        <span class="badge badge-multi">Multi-Value</span>
+                    </label>
+                    <select id="productLine" multiple>
+                        <option value="">-- All Product Lines --</option>
+                        <option value="Classic Cars">Classic Cars</option>
+                        <option value="Motorcycles">Motorcycles</option>
+                        <option value="Planes">Planes</option>
+                        <option value="Ships">Ships</option>
+                        <option value="Trains">Trains</option>
+                        <option value="Trucks and Buses">Trucks and Buses</option>
+                        <option value="Vintage Cars">Vintage Cars</option>
+                    </select>
+                    <small>Hold Ctrl/Cmd to select multiple product lines.</small>
+                </div>
+            </div>
+            <div class="actions">
+                <button id="refresh-btn" class="btn btn-primary">Refresh Data</button>
+                <button id="reset-btn" class="btn btn-secondary">Reset</button>
+            </div>
+        </div>
+
+        <!-- Error Display -->
+        <div id="error" class="error" style="display: none;"></div>
+
+        <!-- Loading State -->
+        <div id="loading" class="loading" style="display: none;">
+            Loading data...
+        </div>
+
+        <!-- Stats Cards -->
+        <div id="stats" class="stats-grid" style="display: none;">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-customers">-</div>
+                <div class="stat-label">Customers</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-orders">-</div>
+                <div class="stat-label">Orders</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-products">-</div>
+                <div class="stat-label">Products</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-revenue">-</div>
+                <div class="stat-label">Total Revenue</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-units">-</div>
+                <div class="stat-label">Units Sold</div>
+            </div>
+        </div>
+
+        <!-- Country Sales Summary -->
+        <div id="country-panel" class="data-panel" style="display: none;">
+            <h2>Sales by Country</h2>
+            <div id="country-data">
+                <p class="no-data">No country data available</p>
+            </div>
+        </div>
+
+        <!-- Product List -->
+        <div id="products-panel" class="data-panel" style="display: none;">
+            <h2>Product List</h2>
+            <div id="products-data">
+                <p class="no-data">No product data available</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===========================================================================
+        // Multi-Value Parameter Test Report (ClassicModels)
+        // ===========================================================================
+        // Tests both immutable and mutable multi-value parameters using the
+        // classicmodels database (scale model cars).
+        // Immutable: country (HMAC-protected, supports IN clause)
+        // Mutable:   productLine (user-changeable, supports IN clause)
+        // ===========================================================================
+
+        'use strict';
+
+        // Wait for DOM and thick client
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('refresh-btn').addEventListener('click', refreshData);
+            document.getElementById('reset-btn').addEventListener('click', resetFilters);
+            displayImmutableParams();
+            refreshData();
+        });
+
+        // Display immutable parameter values
+        function displayImmutableParams() {
+            var countryValues = [];
+            if (window.ReportApp && window.ReportApp.getParamValues) {
+                countryValues = window.ReportApp.getParamValues('country');
+            } else if (window.ReportConfig && window.ReportConfig.params) {
+                try {
+                    var parsed = typeof window.ReportConfig.params === 'string'
+                        ? JSON.parse(window.ReportConfig.params)
+                        : window.ReportConfig.params;
+                    var raw = parsed.country;
+                    if (Array.isArray(raw)) {
+                        countryValues = raw;
+                    } else if (raw != null) {
+                        countryValues = [String(raw)];
+                    }
+                } catch (e) {
+                    console.error('Failed to parse country params:', e);
+                }
+            }
+            var container = document.getElementById('country-values');
+            if (container) {
+                if (countryValues && countryValues.length > 0) {
+                    container.textContent = countryValues.join(', ');
+                } else {
+                    container.textContent = '(none)';
+                }
+            }
+        }
+
+        // Get selected values from multi-select
+        function getMultiSelectValues(elementId) {
+            const select = document.getElementById(elementId);
+            const selected = [];
+            for (const option of select.selectedOptions) {
+                if (option.value) {
+                    selected.push(option.value);
+                }
+            }
+            return selected;
+        }
+
+        // Build params object for refresh
+        function buildRefreshParams() {
+            const params = {};
+            const productLines = getMultiSelectValues('productLine');
+            if (productLines.length > 0) {
+                params.productLine = productLines;
+            }
+            return params;
+        }
+
+        // Refresh data via thick client
+        async function refreshData() {
+            const loadingEl = document.getElementById('loading');
+            const errorEl = document.getElementById('error');
+            const refreshBtn = document.getElementById('refresh-btn');
+
+            loadingEl.style.display = 'block';
+            errorEl.style.display = 'none';
+            refreshBtn.disabled = true;
+
+            try {
+                const params = buildRefreshParams();
+                console.log('🔄 Refreshing with params:', params);
+
+                const data = await window.ReportApp.refresh(params);
+                console.log('✅ Data loaded:', Object.keys(data));
+
+                updateStats(data);
+                updateCountrySales(data);
+                updateProductList(data);
+
+            } catch (error) {
+                console.error('❌ Refresh failed:', error);
+                errorEl.textContent = 'Error: ' + error.message;
+                errorEl.style.display = 'block';
+            } finally {
+                loadingEl.style.display = 'none';
+                refreshBtn.disabled = false;
+            }
+        }
+
+        // Update stats cards
+        function updateStats(data) {
+            const statsEl = document.getElementById('stats');
+            const totals = data.overall_totals;
+
+            if (!totals || !totals.rows || totals.rows.length === 0) {
+                statsEl.style.display = 'none';
+                return;
+            }
+
+            statsEl.style.display = 'grid';
+            const row = totals.rows[0];
+            const cols = totals.columns;
+
+            const getValue = (col) => {
+                const idx = cols.indexOf(col);
+                return idx !== -1 ? row[idx] : '-';
+            };
+
+            document.getElementById('stat-customers').textContent = getValue('total_customers');
+            document.getElementById('stat-orders').textContent = getValue('total_orders');
+            document.getElementById('stat-products').textContent = getValue('total_products');
+            document.getElementById('stat-revenue').textContent = '$' + getValue('total_revenue');
+            document.getElementById('stat-units').textContent = getValue('total_units_sold');
+        }
+
+        // Update country sales table
+        function updateCountrySales(data) {
+            const panel = document.getElementById('country-panel');
+            const container = document.getElementById('country-data');
+            const summary = data.country_sales;
+
+            if (!summary || !summary.rows || summary.rows.length === 0) {
+                panel.style.display = 'none';
+                return;
+            }
+
+            panel.style.display = 'block';
+            let html = '<table><thead><tr>';
+            html += '<th>Country</th>';
+            html += '<th>Customers</th>';
+            html += '<th>Orders</th>';
+            html += '<th>Revenue</th>';
+            html += '<th>Avg Order Value</th>';
+            html += '</tr></thead><tbody>';
+
+            summary.rows.forEach(row => {
+                html += '<tr>';
+                html += '<td>' + row[0] + '</td>';
+                html += '<td>' + row[1] + '</td>';
+                html += '<td>' + row[2] + '</td>';
+                html += '<td>$' + row[3] + '</td>';
+                html += '<td>$' + row[4] + '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        // Update product list table
+        function updateProductList(data) {
+            const panel = document.getElementById('products-panel');
+            const container = document.getElementById('products-data');
+            const products = data.product_list;
+
+            if (!products || !products.rows || products.rows.length === 0) {
+                panel.style.display = 'none';
+                return;
+            }
+
+            panel.style.display = 'block';
+            let html = '<table><thead><tr>';
+            html += '<th>Code</th>';
+            html += '<th>Product</th>';
+            html += '<th>Line</th>';
+            html += '<th>Scale</th>';
+            html += '<th>Buy Price</th>';
+            html += '<th>MSRP</th>';
+            html += '<th>Stock</th>';
+            html += '</tr></thead><tbody>';
+
+            products.rows.forEach(row => {
+                html += '<tr>';
+                html += '<td>' + row[0] + '</td>';
+                html += '<td>' + row[1] + '</td>';
+                html += '<td>' + row[2] + '</td>';
+                html += '<td>' + row[3] + '</td>';
+                html += '<td>$' + row[4] + '</td>';
+                html += '<td>$' + row[5] + '</td>';
+                html += '<td>' + row[6] + '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        // Reset filters
+        function resetFilters() {
+            const productLineSelect = document.getElementById('productLine');
+            for (const option of productLineSelect.options) {
+                option.selected = false;
+            }
+            refreshData();
+        }
+    </script>
+</body>
+</html>
