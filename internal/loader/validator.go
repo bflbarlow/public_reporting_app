@@ -9,7 +9,7 @@ import (
 )
 
 // ValidateReport validates a report definition
-func ValidateReport(report *core.Report) error {
+func ValidateReport(report *core.Report, validDBs map[string]bool) error {
 	if report.ID == "" {
 		return fmt.Errorf("report ID is required")
 	}
@@ -18,8 +18,18 @@ func ValidateReport(report *core.Report) error {
 		return fmt.Errorf("report name is required")
 	}
 
+	// Database: at least one of report.Database or a datasource.Database must be set
 	if report.Database == "" {
-		return fmt.Errorf("database is required")
+		hasDatasourceDB := false
+		for _, ds := range report.Datasources {
+			if ds.Database != "" {
+				hasDatasourceDB = true
+				break
+			}
+		}
+		if !hasDatasourceDB {
+			return fmt.Errorf("database is required: set report.database or datasource.database")
+		}
 	}
 
 	if report.Visibility != core.VisibilityPublic && report.Visibility != core.VisibilityPrivate {
@@ -73,7 +83,7 @@ func ValidateReport(report *core.Report) error {
 
 	// Validate datasources
 	for name, ds := range report.Datasources {
-		if err := ValidateDatasource(name, ds, report); err != nil {
+		if err := ValidateDatasource(name, ds, report, validDBs); err != nil {
 			return err
 		}
 	}
@@ -82,7 +92,7 @@ func ValidateReport(report *core.Report) error {
 }
 
 // ValidateDatasource validates a single datasource
-func ValidateDatasource(name string, ds core.Datasource, report *core.Report) error {
+func ValidateDatasource(name string, ds core.Datasource, report *core.Report, validDBs map[string]bool) error {
 	if ds.SQL == "" {
 		return fmt.Errorf("datasource %s: sql is required", name)
 	}
@@ -94,6 +104,13 @@ func ValidateDatasource(name string, ds core.Datasource, report *core.Report) er
 	for _, param := range params {
 		if !report.ContainsParam(param) {
 			return fmt.Errorf("datasource %s: SQL references undeclared parameter '%s'", name, param)
+		}
+	}
+
+	// Validate datasource-level database exists
+	if ds.Database != "" {
+		if !validDBs[ds.Database] {
+			return fmt.Errorf("datasource %s: database %q not found in databases.yaml", name, ds.Database)
 		}
 	}
 

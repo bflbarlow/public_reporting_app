@@ -8,7 +8,7 @@ This guide covers everything you need to know to build, test, and deploy reports
 
 | Concept | Description |
 |---------|-------------|
-| **Report** | A collection of datasources (SQL queries) and visualizations that display data from a specific database. Defined by a `report.yaml` file and optional `dashboard.html` template. |
+| **Report** | A collection of datasources (SQL queries) and visualizations that display data from one or more databases. Defined by a `report.yaml` file and optional `dashboard.html` template. Each datasource can specify its own database via `datasources.{name}.database`, falling back to `report.database`. |
 | **Datasource** | A named SQL query that provides data to visualizations. Each datasource has a SQL statement with parameter placeholders, row limits, and optional caching. |
 | **Thick Client** | JavaScript layer (`window.ReportApp`) that acts as the sole data bridge between your report and the server. Handles security validation, parameter management, and data refreshing. |
 | **Immutable Parameters** | Security-critical parameters included in HMAC signatures (e.g., `organization_id`, `user_id`). Cannot be changed after URL signing. |
@@ -48,7 +48,7 @@ Each report must have a `report.yaml` file with the following structure:
 id: my_new_report                    # Must match directory name
 name: "My New Report"                # Display name
 description: "Description of the report"
-database: default                    # Database connection from databases.yaml
+database: default                    # Database connection from databases.yaml (fallback)
 visibility: public                   # "public" or "private"
 expires_after: 3600                  # URL expiration in seconds
 max_rows: 10000                      # Maximum rows per datasource
@@ -68,8 +68,11 @@ multi_value_params:
   - status                           # Multiple status values
 
 # Datasources (SQL Queries)
+# Each datasource can optionally specify its own database connection.
+# If 'database' is omitted, the report-level 'database' field is used as the fallback.
 datasources:
   summary_stats:
+    database: default                  # optional — falls back to report.database
     sql: |
       SELECT COUNT(*) as total_orders,
              SUM(amount) as total_revenue
@@ -80,6 +83,7 @@ datasources:
     cache_ttl: 300                   # Cache duration in seconds (optional)
 
   daily_metrics:
+    database: default                  # optional — falls back to report.database
     sql: |
       SELECT DATE(created_at) as date,
              COUNT(*) as orders,
@@ -92,7 +96,34 @@ datasources:
     row_limit: 1000
 ```
 
-### 1.4 Dashboard HTML Template
+### 1.4 Multi-Database Reports
+
+Reports can query **multiple databases** — each datasource specifies its own database connection:
+
+```yaml
+id: cross_database_report
+database: default          # fallback for datasources without a database field
+datasources:
+  customer_data:
+    database: customer_sql  # datasource-level override
+    sql: SELECT * FROM customers WHERE ...
+
+  program_data:
+    database: classicmodels  # another datasource uses a different DB
+    sql: SELECT * FROM products WHERE ...
+
+  fallback_report:
+    # No database field — uses report.database ("default") as fallback
+    sql: SELECT * FROM default_table WHERE ...
+```
+
+**Rules:**
+- `report.database` is **required** as the fallback for all datasources
+- `datasources.{name}.database` is **optional** — if omitted, the report-level database is used
+- At least one of `report.database` or a datasource-level `database` must be set for the report to be valid
+- Database names must exist in `databases.yaml` — validation errors are logged at startup
+
+### 1.5 Dashboard HTML Template
 
 Create a `dashboard.html` file that includes:
 

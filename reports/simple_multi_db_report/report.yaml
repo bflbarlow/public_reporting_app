@@ -1,0 +1,94 @@
+# Report: Simple Multi-Database Report
+# =====================================
+# Demonstrates a single report querying TWO databases:
+#   1. customer_sql  → seeker_profiles (seeker demographics)
+#   2. classicmodels → customers (scale model car retailer)
+#
+# This report shows how datasources can each specify their own database
+# via the 'database' field, falling back to report.database if omitted.
+#
+# Immutable params: subdomain (data isolation)
+# Mutable params:   program_status (filter), category (filter)
+#
+# CLI example:
+#   go run main.go -genurl -report simple_multi_db_report \
+#     -params "subdomain=example"
+
+id: simple_multi_db_report
+name: "Multi-Database Cross-Reference"
+description: "Cross-references seeker profiles from customer_sql with customer data from classicmodels"
+database: default
+visibility: public
+expires_after: 3600
+max_rows: 10000
+
+# Immutable parameters (included in HMAC signature)
+immutable_params:
+  - subdomain
+
+# Mutable parameters (can be changed by users)
+mutable_params:
+  - program_status
+  - category
+
+# Datasources (SQL Queries)
+# Each datasource specifies its own database connection.
+datasources:
+  # Data from customer_sql database
+  seeker_demographics:
+    database: customer_sql
+    sql: |
+      SELECT 
+        subdomain,
+        COUNT(*) as seeker_count
+      FROM seeker_profiles
+      WHERE ({{subdomain}} IS NULL OR subdomain = {{subdomain}})
+      GROUP BY subdomain
+      ORDER BY seeker_count DESC
+    row_limit: 50
+    description: "Seekers by subdomain (tenant)"
+
+  # Data from classicmodels database
+  customer_overview:
+    database: classicmodels
+    sql: |
+      SELECT 
+        c.country,
+        COUNT(DISTINCT c.customerNumber) as customer_count,
+        AVG(c.creditLimit) as avg_credit_limit
+      FROM customers c
+      GROUP BY c.country
+      ORDER BY customer_count DESC
+    row_limit: 100
+    description: "Customers by country"
+
+  # Data from classicmodels - product lines
+  product_summary:
+    database: classicmodels
+    sql: |
+      SELECT 
+        pl.productLine,
+        COUNT(DISTINCT p.productCode) as product_count,
+        AVG(p.buyPrice) as avg_price
+      FROM productlines pl
+      JOIN products p ON pl.productLine = p.productLine
+      GROUP BY pl.productLine
+      ORDER BY product_count DESC
+    row_limit: 50
+    cache_ttl: 600
+    description: "Product lines with average price"
+
+  # Data from customer_sql - program count by published status
+  program_status:
+    database: customer_sql
+    sql: |
+      SELECT 
+        program_published_status,
+        COUNT(*) as program_count
+      FROM programs
+      WHERE ({{program_status}} IS NULL OR program_published_status = {{program_status}})
+        AND ({{category}} IS NULL OR categories = {{category}})
+      GROUP BY program_published_status
+      ORDER BY program_count DESC
+    row_limit: 50
+    description: "Programs by published status"

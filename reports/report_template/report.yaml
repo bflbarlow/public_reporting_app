@@ -43,6 +43,7 @@ datasources:
   
   # Example: Summary statistics
   data_summary:
+    database: default
     sql: |
       -- ALWAYS include organization_id filter for data security
       -- Use parameter placeholders {{parameter_name}} for dynamic values
@@ -63,6 +64,7 @@ datasources:
   
   # Example: Time series data
   time_series:
+    database: default
     sql: |
       SELECT 
         DATE(created_at) as date,
@@ -79,6 +81,7 @@ datasources:
   
   # Example: Category breakdown
   category_breakdown:
+    database: default
     sql: |
       SELECT 
         category,
@@ -97,6 +100,7 @@ datasources:
   
   # Example: Top items list
   top_items:
+    database: default
     sql: |
       SELECT 
         item_name,

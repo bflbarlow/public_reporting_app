@@ -40,6 +40,7 @@ multi_value_params:
 datasources:
   # Returns customer count and total payments by country, filtered by productLine
   country_sales:
+    database: classicmodels
     sql: |
       SELECT 
         c.country,
@@ -60,6 +61,7 @@ datasources:
 
   # Returns product-level detail for the selected countries and product lines
   product_list:
+    database: classicmodels
     sql: |
       SELECT 
         p.productCode,
@@ -83,6 +85,7 @@ datasources:
 
   # Returns a single-row aggregate for the selected filters
   overall_totals:
+    database: classicmodels
     sql: |
       SELECT 
         COUNT(DISTINCT c.customerNumber) as total_customers,
