@@ -65,7 +65,7 @@ The Reporting App demonstrates a **security-first architecture** with strong cry
 
 **Security Assessment:**
 - ✅ **In-Memory Storage:** Nonces stored in memory-only map
-- ✅ **Time-based Cleanup:** Old nonces removed after 24 hours
+- ✅ **Time-based Cleanup:** Old nonces removed after configurable period (default 24 hours, via `NONCE_MAX_AGE`)
 - ✅ **Thread-Safe Operations:** Mutex-protected concurrent access
 - ⚠️ **No Persistence:** Nonce state lost on application restart
 - ⚠️ **No Cluster Support:** Single-instance only; not suitable for load-balanced deployments
@@ -375,7 +375,7 @@ Initial Signed URL → Validate → Execute Query → Return Data + New Signed U
 ```
 
 **Attack Scenarios:**
-1. **Grace Period Abuse:** Expired URLs usable for 5 minutes
+1. **Grace Period Abuse:** Expired URLs usable for configurable grace period (default 5 minutes, via `REFRESH_GRACE_PERIOD`)
 2. **Parameter Injection:** Client could add parameters not in original URL
 3. **Refresh Loops:** No rate limiting on refresh endpoint
 

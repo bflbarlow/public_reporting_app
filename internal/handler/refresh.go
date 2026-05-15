@@ -16,23 +16,33 @@ import (
 
 // RefreshHandler handles POST /refresh requests
 type RefreshHandler struct {
-	loader      *loader.Loader
-	dbManager   *database.Manager
-	nonceTracker *security.NonceTracker
-	hmacSecret  []byte
+	loader          *loader.Loader
+	dbManager       *database.Manager
+	nonceTracker    *security.NonceTracker
+	hmacSecret      []byte
 	enablePublicPaths bool
-	allowOrigins []string
+	allowOrigins    []string
+	securityConfig  core.SecurityConfig
 }
 
-// NewRefreshHandler creates a new refresh handler
-func NewRefreshHandler(loader *loader.Loader, dbManager *database.Manager, nonceTracker *security.NonceTracker, hmacSecret []byte, enablePublicPaths bool, allowOrigins []string) *RefreshHandler {
+// NewRefreshHandler creates a new refresh handler.
+func NewRefreshHandler(
+	loader *loader.Loader,
+	dbManager *database.Manager,
+	nonceTracker *security.NonceTracker,
+	hmacSecret []byte,
+	enablePublicPaths bool,
+	allowOrigins []string,
+	securityConfig core.SecurityConfig,
+) *RefreshHandler {
 	return &RefreshHandler{
-		loader:      loader,
-		dbManager:   dbManager,
-		nonceTracker: nonceTracker,
-		hmacSecret:  hmacSecret,
+		loader:          loader,
+		dbManager:       dbManager,
+		nonceTracker:    nonceTracker,
+		hmacSecret:      hmacSecret,
 		enablePublicPaths: enablePublicPaths,
-		allowOrigins: allowOrigins,
+		allowOrigins:    allowOrigins,
+		securityConfig:  securityConfig,
 	}
 }
 
@@ -237,7 +247,7 @@ func (h *RefreshHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	
 	// Check expiration with grace period
 	now := time.Now().Unix()
-	if expires < now-core.RefreshGraceSeconds {
+	if expires < now-int64(h.securityConfig.RefreshGrace) {
 		h.respondError(w, http.StatusForbidden, "URL expired (beyond grace period)")
 		return
 	}
@@ -367,13 +377,16 @@ func (h *RefreshHandler) executeDatasources(report *core.Report, params map[stri
 	return result, nil
 }
 
-// generateNextURL generates a new signed URL for the next refresh
+// generateNextURL generates a new signed URL for the next refresh.
 func (h *RefreshHandler) generateNextURL(report *core.Report, params map[string][]string) (string, error) {
-	// Generate new nonce (simple implementation)
-	nonce := fmt.Sprintf("%d", time.Now().UnixNano())
+	// Generate new nonce using the shared helper
+	nonce, err := security.GenerateNonce(h.securityConfig.Nonce.Bytes, h.securityConfig.Nonce.Encoding)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate nonce: %w", err)
+	}
 	
-	// New expiration (5 minutes from now)
-	expires := time.Now().Unix() + core.MaxURLExpirySeconds
+	// New expiration (use configured default)
+	expires := time.Now().Unix() + int64(h.securityConfig.Expiry.Default)
 	
 	// Extract immutable parameters
 	immutableParams := report.ExtractImmutable(params)

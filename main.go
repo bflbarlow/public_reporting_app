@@ -1,17 +1,17 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"flag"
 	"fmt"
 	"log"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
+	"reporting_app/internal/core"
 	"reporting_app/internal/database"
 	"reporting_app/internal/handler"
 	"reporting_app/internal/loader"
@@ -34,7 +34,9 @@ func main() {
 	flag.Parse()
 
 	if *genURL {
-		generateURL(*reportID, *expiresSec, *paramsStr)
+		// Load config early for URL generation
+		cfg := loadConfig()
+		generateURL(*reportID, *expiresSec, *paramsStr, cfg.securityConfig)
 		return
 	}
 
@@ -49,7 +51,7 @@ func main() {
 	log.Printf("Loaded %d reports", len(reportLoader.ListReports()))
 
 	// Initialize security
-	nonceTracker := security.NewNonceTracker(60 * time.Second)
+	nonceTracker := security.NewNonceTracker(config.securityConfig.Nonce)
 	defer nonceTracker.Stop()
 
 	// Initialize query logging
@@ -68,8 +70,18 @@ func main() {
 	defer dbManager.CloseAll()
 
 	// Create handlers
-	embedHandler := handler.NewEmbedHandler(reportLoader, dbManager, nonceTracker, config.hmacSecret, config.enablePublicPaths, config.allowOrigins, config.allowedCDNs)
-	refreshHandler := handler.NewRefreshHandler(reportLoader, dbManager, nonceTracker, config.hmacSecret, config.enablePublicPaths, config.allowOrigins)
+	embedHandler := handler.NewEmbedHandler(
+		reportLoader, dbManager, nonceTracker,
+		config.hmacSecret, config.enablePublicPaths,
+		config.allowOrigins, config.allowedCDNs,
+		config.securityConfig,
+	)
+	refreshHandler := handler.NewRefreshHandler(
+		reportLoader, dbManager, nonceTracker,
+		config.hmacSecret, config.enablePublicPaths,
+		config.allowOrigins,
+		config.securityConfig,
+	)
 
 	// Log security mode
 	if config.enablePublicPaths {
@@ -77,6 +89,14 @@ func main() {
 	} else {
 		log.Printf("🔒 Security enabled (HMAC, nonce, expiry validation)")
 	}
+	
+	// Log security config
+	log.Printf("🔒 Security: URL expiry [%s - %s], default %s", 
+		config.securityConfig.Expiry.Min, config.securityConfig.Expiry.Max, config.securityConfig.Expiry.Default)
+	log.Printf("🔒 Security: Nonce %d bytes (%s), max age %s, max uses %d",
+		config.securityConfig.Nonce.Bytes, config.securityConfig.Nonce.Encoding,
+		config.securityConfig.Nonce.MaxAge, config.securityConfig.Nonce.MaxUses)
+	log.Printf("🔒 Security: Refresh grace %s", config.securityConfig.RefreshGrace)
 	
 	// Log CSP configuration
 	if len(config.allowOrigins) == 1 && config.allowOrigins[0] == "*" {
@@ -111,6 +131,7 @@ type config struct {
 	allowedCDNs     []string
 	queryLogging    bool
 	queryLogDir     string
+	securityConfig  core.SecurityConfig
 }
 
 func loadConfig() *config {
@@ -197,11 +218,77 @@ func loadConfig() *config {
 		cfg.queryLogDir = "./query_log"
 	}
 
+	// Load default security config and override with env vars
+	cfg.securityConfig = core.DefaultSecurityConfig()
+	cfg.securityConfig = parseSecurityConfig(cfg.securityConfig)
+
+	// Validate security config
+	if err := cfg.securityConfig.Validate(); err != nil {
+		log.Fatalf("Invalid security configuration: %v", err)
+	}
+
 	return cfg
 }
 
-// generateURL generates a signed URL for testing
-func generateURL(reportID string, expiresSec int, paramsStr string) {
+// parseSecurityConfig reads Phase 1 env vars and overrides defaults.
+func parseSecurityConfig(cfg core.SecurityConfig) core.SecurityConfig {
+	// URL expiry
+	if v := os.Getenv("URL_EXPIRY_DEFAULT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			cfg.Expiry.Default = d
+		}
+	}
+	if v := os.Getenv("URL_EXPIRY_MIN"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			cfg.Expiry.Min = d
+		}
+	}
+	if v := os.Getenv("URL_EXPIRY_MAX"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			cfg.Expiry.Max = d
+		}
+	}
+	if v := os.Getenv("REFRESH_GRACE_PERIOD"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			cfg.RefreshGrace = d
+		}
+	}
+
+	// Nonce settings
+	if v := os.Getenv("NONCE_BYTES"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.Nonce.Bytes = n
+		}
+	}
+	if v := os.Getenv("NONCE_ENCODING"); v != "" {
+		cfg.Nonce.Encoding = v
+	}
+	if v := os.Getenv("NONCE_MAX_AGE"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			cfg.Nonce.MaxAge = d
+		}
+	}
+	if v := os.Getenv("NONCE_CLEANUP_INTERVAL"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			cfg.Nonce.CleanupInterval = d
+		}
+	}
+	if v := os.Getenv("NONCE_MAX_USES"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.Nonce.MaxUses = n
+		}
+	}
+	if v := os.Getenv("NONCE_USE_WINDOW"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			cfg.Nonce.UseWindow = d
+		}
+	}
+
+	return cfg
+}
+
+// generateURL generates a signed URL for testing.
+func generateURL(reportID string, expiresSec int, paramsStr string, secCfg core.SecurityConfig) {
 	if reportID == "" {
 		log.Fatal("Report ID required (use -report flag)")
 	}
@@ -275,16 +362,6 @@ func generateURL(reportID string, expiresSec int, paramsStr string) {
 		log.Fatalf("Parameter validation failed: %v", err)
 	}
 
-	// Generate nonce
-	nonceBytes := make([]byte, 32)
-	if _, err := rand.Read(nonceBytes); err != nil {
-		log.Fatalf("Failed to generate nonce: %v", err)
-	}
-	nonce := base64.URLEncoding.EncodeToString(nonceBytes)
-
-	// Calculate expires
-	expires := time.Now().Unix() + int64(expiresSec)
-
 	// Extract immutable parameters
 	immutableParams := report.ExtractImmutable(params)
 
@@ -294,12 +371,31 @@ func generateURL(reportID string, expiresSec int, paramsStr string) {
 		log.Fatal("HMAC_SECRET must be set in environment")
 	}
 
+	// Generate nonce using the shared helper
+	nonce, err := security.GenerateNonce(secCfg.Nonce.Bytes, secCfg.Nonce.Encoding)
+	if err != nil {
+		log.Fatalf("Failed to generate nonce: %v", err)
+	}
+
+	// Calculate expires
+	expires := time.Now().Unix() + int64(expiresSec)
+
+	// Validate expires against config bounds
+	if err := security.ValidateExpiry(time.Duration(expiresSec)*time.Second, 
+		secCfg.Expiry.Min, secCfg.Expiry.Max); err != nil {
+		log.Fatalf("Invalid -expires value: %v", err)
+	}
+
 	// Sign URL
 	sig := security.SignURL(reportID, expires, nonce, immutableParams, []byte(secret))
 
-	// Build URL
-	finalURL := fmt.Sprintf("http://localhost:8080/api/embed?report_id=%s&expires=%d&nonce=%s&sig=%s",
-		reportID, expires, nonce, sig)
+	// Build URL - use configurable port if available
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	finalURL := fmt.Sprintf("http://localhost:%s/api/embed?report_id=%s&expires=%d&nonce=%s&sig=%s",
+		port, reportID, expires, nonce, sig)
 
 	// Add all parameters (including empty values for optional mutable parameters)
 	for key, values := range params {

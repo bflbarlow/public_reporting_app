@@ -167,6 +167,27 @@ When the `ENABLE_PUBLIC_PATHS` environment variable is set to `true`, all securi
 - Immutable parameters can still not be changed (maintains data integrity)
 - Useful for development and testing
 
+### Configurable Security Parameters (Phase 1)
+All security timeouts and limits are configurable via environment variables:
+
+**URL Expiration**
+- `URL_EXPIRY_DEFAULT` — default URL lifetime (default: `5m`)
+- `URL_EXPIRY_MIN` — minimum allowed expiration (default: `1m`)
+- `URL_EXPIRY_MAX` — maximum allowed expiration (default: `24h`)
+- `REFRESH_GRACE_PERIOD` — grace period after expiry (default: `0s`)
+
+**NONCE Settings**
+- `NONCE_BYTES` — random bytes (16‑64, default: `32`)
+- `NONCE_ENCODING` — encoding format (`urlsafe-base64`, `base64`, `hex`, default: `urlsafe-base64`)
+- `NONCE_MAX_AGE` — maximum nonce lifetime (default: `24h`)
+- `NONCE_CLEANUP_INTERVAL` — cleanup frequency (default: `60s`)
+- `NONCE_MAX_USES` — max uses per nonce (default: `1`, single‑use)
+- `NONCE_USE_WINDOW` — sliding window for multi‑use (default: `5m`)
+
+**Defaults match previous hardcoded values** — zero‑downtime migration.
+
+**Nonce Usage Pattern:** `/api/embed` consumes a nonce use; `/refresh` does not. This allows multiple refreshes from the same signed URL while preventing replay of the embed itself.
+
 ## Thick Client API
 
 **Complete Guide:** See `THICK_CLIENT_FOR_REPORT_DEVS.md` for detailed usage instructions.
@@ -193,6 +214,8 @@ const isImmutable = window.ReportApp.isImmutable('organization_id');
 ## Configuration
 
 ### Environment Variables
+
+#### Basic Configuration
 - `PORT` - HTTP port (default: 8080)
 - `HMAC_SECRET` - **Required** for signing URLs (unless `ENABLE_PUBLIC_PATHS=true`)
 - `REPORTS_DIR` - Reports directory (default: ./reports)
@@ -201,6 +224,26 @@ const isImmutable = window.ReportApp.isImmutable('organization_id');
 - `ENABLE_PUBLIC_PATHS` - Set to `true` to bypass HMAC/nonce/expired security (testing only, default: false)
 - `ALLOW_ORIGINS` - Comma-separated list of origins allowed to embed reports (default: `*` meaning any origin). Example: `http://localhost:8080,https://example.com`
 - `ALLOWED_CDNS` - Comma-separated list of CDN origins for scripts and connections (default: empty). Example: `https://cdn.jsdelivr.net,https://cdn.plot.ly`
+- `QUERY_LOGGING` - Enable query logging for development/troubleshooting (default: false)
+- `QUERY_LOG_DIR` - Directory for query logs (default: ./query_log)
+
+#### Security Configuration (Phase 1)
+
+**URL Expiration**
+- `URL_EXPIRY_DEFAULT` - Default URL expiration (default: `5m`)
+- `URL_EXPIRY_MIN` - Minimum allowed expiration (default: `1m`)
+- `URL_EXPIRY_MAX` - Maximum allowed expiration (default: `24h`)
+- `REFRESH_GRACE_PERIOD` - Grace period after URL expiry (default: `0s`)
+
+**NONCE Settings**
+- `NONCE_BYTES` - Random bytes for nonce (16‑64, default: `32`)
+- `NONCE_ENCODING` - Encoding format (`urlsafe-base64`, `base64`, `hex`, default: `urlsafe-base64`)
+- `NONCE_MAX_AGE` - Maximum nonce lifetime (default: `24h`)
+- `NONCE_CLEANUP_INTERVAL` - Cleanup frequency (default: `60s`)
+- `NONCE_MAX_USES` - Maximum uses per nonce (default: `1`, single‑use)
+- `NONCE_USE_WINDOW` - Sliding window for multi‑use nonces (default: `5m`)
+
+**Note:** All defaults match previous hardcoded values for zero‑downtime migration.
 
 ### Database Configuration
 Edit `databases.yaml`:

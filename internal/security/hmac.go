@@ -2,13 +2,16 @@ package security
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"net/url"
 	"sort"
 	"strings"
-	
+	"time"
+
 	"reporting_app/internal/core"
 )
 
@@ -129,4 +132,41 @@ func ParseSignedParams(query url.Values) (reportID string, expires int64, nonce,
 	}
 	
 	return reportID, expires, nonce, sig, nil
+}
+
+// ValidateExpiry checks that a duration is within the allowed range.
+func ValidateExpiry(d time.Duration, min, max time.Duration) error {
+	if d < min {
+		return fmt.Errorf("expiry %s is below minimum %s", d, min)
+	}
+	if d > max {
+		return fmt.Errorf("expiry %s exceeds maximum %s", d, max)
+	}
+	return nil
+}
+
+// GenerateNonce generates a cryptographically random nonce.
+func GenerateNonce(bytes int, encoding string) (string, error) {
+	if bytes < 16 || bytes > 64 {
+		return "", fmt.Errorf("nonce bytes must be between 16 and 64, got %d", bytes)
+	}
+	raw := make([]byte, bytes)
+	if _, err := rand.Read(raw); err != nil {
+		return "", fmt.Errorf("failed to generate random bytes: %w", err)
+	}
+	return EncodeNonce(raw, encoding), nil
+}
+
+// EncodeNonce encodes raw bytes using the specified encoding.
+func EncodeNonce(raw []byte, encoding string) string {
+	switch encoding {
+	case "hex":
+		return hex.EncodeToString(raw)
+	case "base64":
+		return base64.StdEncoding.EncodeToString(raw)
+	case "urlsafe-base64", "":
+		return base64.URLEncoding.EncodeToString(raw)
+	default:
+		return base64.URLEncoding.EncodeToString(raw)
+	}
 }
