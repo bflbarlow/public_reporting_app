@@ -1,7 +1,6 @@
 package logging
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -10,26 +9,12 @@ import (
 	"time"
 )
 
-// LogEntry represents a single query log entry
-type LogEntry struct {
-	Timestamp  string        `json:"timestamp"`
-	ReportID   string        `json:"report_id"`
-	Datasource string        `json:"datasource,omitempty"`
-	Database   string        `json:"database"`
-	SQL        string        `json:"sql"`
-	Params     []interface{} `json:"params"`
-	DurationMs float64       `json:"duration_ms"`
-	RowCount   int           `json:"row_count"`
-	Error      string        `json:"error,omitempty"`
-	RowLimit   int           `json:"row_limit,omitempty"`
-}
-
-// QueryLogger handles logging of database queries
+// QueryLogger handles logging of database queries.
+// Each query is written as a separate text file for easy reading.
 type QueryLogger struct {
 	enabled bool
 	dir     string
 	mu      sync.Mutex
-	file    *os.File
 }
 
 // NewQueryLogger creates a new query logger
@@ -38,22 +23,16 @@ func NewQueryLogger(enabled bool, dir string) *QueryLogger {
 		enabled: enabled,
 		dir:     dir,
 	}
-	
+
 	if enabled {
 		if err := logger.ensureDirectory(); err != nil {
 			log.Printf("Failed to create query log directory: %v", err)
 			logger.enabled = false
 			return logger
 		}
-		
-		if err := logger.openLogFile(); err != nil {
-			log.Printf("Failed to open query log file: %v", err)
-			logger.enabled = false
-		} else {
-			log.Printf("Query logging enabled: %s", dir)
-		}
+		log.Printf("Query logging enabled: %s", dir)
 	}
-	
+
 	return logger
 }
 
@@ -62,111 +41,111 @@ func (ql *QueryLogger) ensureDirectory() error {
 	return os.MkdirAll(ql.dir, 0755)
 }
 
-// openLogFile opens or creates the daily log file
-func (ql *QueryLogger) openLogFile() error {
-	ql.mu.Lock()
-	defer ql.mu.Unlock()
-	
-	// Close existing file if open
-	if ql.file != nil {
-		ql.file.Close()
-		ql.file = nil
-	}
-	
-	// Create filename based on current date
-	filename := filepath.Join(ql.dir, time.Now().Format("2006-01-02")+".log")
-	
-	// Open file for appending
-	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open log file %s: %w", filename, err)
-	}
-	
-	ql.file = file
-	return nil
+// ensureDateDirectory creates a date subdirectory if it doesn't exist
+func (ql *QueryLogger) ensureDateDirectory(date string) error {
+	dir := filepath.Join(ql.dir, date)
+	return os.MkdirAll(dir, 0755)
 }
 
-// getCurrentLogFile ensures we're writing to the correct daily file
-func (ql *QueryLogger) getCurrentLogFile() (*os.File, error) {
-	ql.mu.Lock()
-	defer ql.mu.Unlock()
-	
-	if ql.file == nil {
-		if err := ql.openLogFile(); err != nil {
-			return nil, err
-		}
-	}
-	
-	// Check if we need to rotate to a new day
-	currentFilename := filepath.Join(ql.dir, time.Now().Format("2006-01-02")+".log")
-	actualFilename := ql.file.Name()
-	
-	if currentFilename != actualFilename {
-		// Day changed, open new file
-		if err := ql.openLogFile(); err != nil {
-			return nil, err
-		}
-	}
-	
-	return ql.file, nil
+// sanitizeFilename removes characters that are invalid in filenames
+func sanitizeFilename(s string) string {
+	result := s
+	result = replaceAll(result, ":", "_")
+	result = replaceAll(result, "/", "_")
+	result = replaceAll(result, "\\", "_")
+	result = replaceAll(result, "*", "_")
+	result = replaceAll(result, "?", "_")
+	result = replaceAll(result, "\"", "_")
+	result = replaceAll(result, "<", "_")
+	result = replaceAll(result, ">", "_")
+	result = replaceAll(result, "|", "_")
+	return result
 }
 
-// Log writes a query log entry
-func (ql *QueryLogger) Log(reportID, datasource, dbName, sql string, params []interface{}, duration time.Duration, rows int, rowLimit int, queryErr error) {
+// replaceAll is a simple string replacement helper
+func replaceAll(s, old, new string) string {
+	result := []byte{}
+	for i := 0; i < len(s); i++ {
+		if i+len(old) <= len(s) && s[i:i+len(old)] == old {
+			result = append(result, []byte(new)...)
+			i += len(old) - 1
+		} else {
+			result = append(result, s[i])
+		}
+	}
+	return string(result)
+}
+
+// Log writes a query log entry as a separate text file.
+// Parameters:
+//
+//	dateDir: date directory (e.g. "2026-05-15")
+//	timestamp: UTC timestamp for the filename
+//	datasource: the datasource name
+//	reportID: the report ID
+//	reportName: the human-readable report name
+//	dbName: the database name
+//	actualSQL: the actual SQL sent to the database (with parameters substituted)
+//	duration: query execution duration
+//	rows: number of rows returned
+//	rowLimit: the row limit that was applied
+//	queryErr: any error that occurred
+func (ql *QueryLogger) Log(dateDir, timestamp, datasource, reportID, reportName, dbName, actualSQL string, duration time.Duration, rows int, rowLimit int, queryErr error) {
 	if !ql.enabled {
 		return
 	}
-	
+
 	// Prepare error message
 	errorMsg := ""
 	if queryErr != nil {
 		errorMsg = queryErr.Error()
 	}
-	
-	// Create log entry
-	entry := LogEntry{
-		Timestamp:  time.Now().UTC().Format(time.RFC3339Nano),
-		ReportID:   reportID,
-		Datasource: datasource,
-		Database:   dbName,
-		SQL:        sql,
-		Params:     params,
-		DurationMs: float64(duration.Microseconds()) / 1000.0, // Convert to milliseconds
-		RowCount:   rows,
-		Error:      errorMsg,
-		RowLimit:   rowLimit,
-	}
-	
-	// Marshal to JSON
-	jsonData, err := json.Marshal(entry)
-	if err != nil {
-		log.Printf("Failed to marshal query log entry: %v", err)
+
+	// Build filename: YYYY-MM-DDTHH_MM_SSZ_datasource_report
+	safeDS := sanitizeFilename(datasource)
+	safeReport := sanitizeFilename(reportID)
+	filename := fmt.Sprintf("%sT%s_%s_%s.txt", dateDir, timestamp, safeDS, safeReport)
+
+	// Build file path
+	filePath := filepath.Join(ql.dir, dateDir, filename)
+
+	// Ensure date directory exists
+	if err := ql.ensureDateDirectory(dateDir); err != nil {
+		log.Printf("Failed to create query log date directory %s: %v", dateDir, err)
 		return
 	}
-	
-	// Get current log file
-	file, err := ql.getCurrentLogFile()
-	if err != nil {
-		log.Printf("Failed to get query log file: %v", err)
-		return
+
+	// Format duration
+	durationStr := fmt.Sprintf("%.3fms", float64(duration.Microseconds())/1000.0)
+
+	// Build content
+	var content string
+	if queryErr != nil {
+		content = fmt.Sprintf(
+			"--- %s UTC ---\nreport: %s\ndatasource: %s\ndatabase: %s\nduration: %s\nrows: %d (ERROR)\nrow_limit: %d\n---\n\n%s\n\nERROR: %s\n",
+			timestamp, reportName, datasource, dbName,
+			durationStr, rows, rowLimit,
+			actualSQL, errorMsg,
+		)
+	} else {
+		content = fmt.Sprintf(
+			"--- %s UTC ---\nreport: %s\ndatasource: %s\ndatabase: %s\nduration: %s\nrows: %d\nrow_limit: %d\n---\n\n%s\n",
+			timestamp, reportName, datasource, dbName,
+			durationStr, rows, rowLimit,
+			actualSQL,
+		)
 	}
-	
-	// Write entry with newline
+
+	// Write file
 	ql.mu.Lock()
 	defer ql.mu.Unlock()
-	
-	if _, err := file.Write(append(jsonData, '\n')); err != nil {
-		log.Printf("Failed to write query log entry: %v", err)
+
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		log.Printf("Failed to write query log file %s: %v", filePath, err)
 	}
 }
 
-// Close closes the log file
+// Close is a no-op for the file-per-query logger
 func (ql *QueryLogger) Close() error {
-	ql.mu.Lock()
-	defer ql.mu.Unlock()
-	
-	if ql.file != nil {
-		return ql.file.Close()
-	}
 	return nil
 }
