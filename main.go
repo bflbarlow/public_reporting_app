@@ -31,7 +31,25 @@ func main() {
 	reportID := flag.String("report", "", "Report ID for URL generation")
 	expiresSec := flag.Int("expires", 300, "Expiration in seconds from now")
 	paramsStr := flag.String("params", "", "Parameters as key=value|key=value (use | to separate pairs, , for multi-value)")
+	reloadSnippets := flag.Bool("reload-snippets", false, "Reload snippets from disk and print count")
 	flag.Parse()
+
+	if *reloadSnippets {
+		// Load snippets and print count
+		snippetsDir := os.Getenv("SNIPPETS_DIR")
+		if snippetsDir == "" {
+			snippetsDir = "./snippets"
+		}
+		snippets, err := loader.LoadSnippets(snippetsDir)
+		if err != nil {
+			log.Fatalf("Failed to load snippets from %s: %v", snippetsDir, err)
+		}
+		log.Printf("📦 Loaded %d snippets from %s", len(snippets), snippetsDir)
+		for name, snippet := range snippets {
+			log.Printf("  - %s: %s", name, snippet.Description)
+		}
+		return
+	}
 
 	if *genURL {
 		// Load config early for URL generation
@@ -83,6 +101,10 @@ func main() {
 		config.securityConfig,
 	)
 
+	// Pass snippets to handlers (they will use them during query execution)
+	embedHandler.SetSnippets(config.snippets)
+	refreshHandler.SetSnippets(config.snippets)
+
 	// Log security mode
 	if config.enablePublicPaths {
 		log.Printf("⚠️  PUBLIC PATHS ENABLED - security validation bypassed")
@@ -132,6 +154,7 @@ type config struct {
 	queryLogging    bool
 	queryLogDir     string
 	securityConfig  core.SecurityConfig
+	snippets        map[string]*loader.Snippet
 }
 
 func loadConfig() *config {
@@ -225,6 +248,23 @@ func loadConfig() *config {
 	// Validate security config
 	if err := cfg.securityConfig.Validate(); err != nil {
 		log.Fatalf("Invalid security configuration: %v", err)
+	}
+
+	// Load snippets (optional)
+	snippetsDir := os.Getenv("SNIPPETS_DIR")
+	if snippetsDir == "" {
+		snippetsDir = "./snippets"
+	}
+	cfg.snippets = nil
+	if info, err := os.Stat(snippetsDir); err == nil && info.IsDir() {
+		cfg.snippets, err = loader.LoadSnippets(snippetsDir)
+		if err != nil {
+			log.Printf("⚠️  Failed to load snippets from %s: %v (snippets are optional)", snippetsDir, err)
+		} else {
+			log.Printf("📦 Loaded %d snippets from %s", len(cfg.snippets), snippetsDir)
+		}
+	} else {
+		log.Printf("ℹ️  No snippets directory found at %s (snippets are optional)", snippetsDir)
 	}
 
 	return cfg

@@ -1,0 +1,4 @@
+name: testing
+description: "Filter by user status"
+sql: |
+  100

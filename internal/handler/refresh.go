@@ -23,6 +23,7 @@ type RefreshHandler struct {
 	enablePublicPaths bool
 	allowOrigins    []string
 	securityConfig  core.SecurityConfig
+	snippets        map[string]*loader.Snippet
 }
 
 // NewRefreshHandler creates a new refresh handler.
@@ -44,6 +45,11 @@ func NewRefreshHandler(
 		allowOrigins:    allowOrigins,
 		securityConfig:  securityConfig,
 	}
+}
+
+// SetSnippets sets the snippets map for this handler.
+func (h *RefreshHandler) SetSnippets(snippets map[string]*loader.Snippet) {
+	h.snippets = snippets
 }
 
 // RefreshRequest represents the JSON request body for refresh
@@ -363,7 +369,20 @@ func (h *RefreshHandler) executeDatasources(report *core.Report, params map[stri
 			rowLimit = report.MaxRows
 		}
 		
-		queryResult, err := h.dbManager.ExecuteDatasource(db, ds, params, report, rowLimit, timeout, report.ID, name, dbName)
+		// Expand snippets in SQL
+		expandedSQL := ds.SQL
+		if h.snippets != nil {
+			expandedSQL, err = loader.ExpandSnippets(h.snippets, ds.SQL)
+			if err != nil {
+				return nil, fmt.Errorf("datasource %s: snippet expansion failed: %w", name, err)
+			}
+		}
+		
+		// Create a copy of datasource with expanded SQL
+		dsExpanded := ds
+		dsExpanded.SQL = expandedSQL
+		
+		queryResult, err := h.dbManager.ExecuteDatasource(db, dsExpanded, params, report, rowLimit, timeout, report.ID, name, dbName)
 		if err != nil {
 			return nil, fmt.Errorf("datasource %s: %w", name, err)
 		}

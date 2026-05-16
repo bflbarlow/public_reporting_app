@@ -1093,6 +1093,78 @@ docs(report): Add README for referral_funnel_dashboard
 - [ ] **Testing**: Works with edge cases
 - [ ] **Documentation**: Clear comments and structure
 
+## 6. SQL Snippets Conventions
+
+### 6.1 Snippet Naming
+
+- Use **descriptive, lowercase names** with hyphens: `base_sales_query`, `default_date_filter`
+- Prefix by category if helpful: `sales_base_query`, `filters_date_range`
+- Never use spaces, colons, or special characters in names
+- Name must match filename exactly (without `.yaml` extension)
+
+### 6.2 Snippet Organization
+
+- All snippets live in `snippets/` directory (flat structure, no subdirectories)
+- Group related snippets with naming convention: `sales_base_query.yaml`, `sales_default_filter.yaml`
+- Keep snippets focused — one snippet per logical SQL block
+- Document each snippet with `description` field
+
+### 6.3 Snippet Types and Usage
+
+| Type | When to Use | Example |
+|------|-------------|---------|
+| **Full SELECT** | Reusable query base | `base_sales_query` |
+| **WHERE fragment** | Common filter conditions | `default_date_filter` |
+| **JOIN fragment** | Reusable table joins | `customer_join` |
+| **SELECT fragment** | Reusable column lists | `user_columns` |
+| **GROUP BY fragment** | Common grouping logic | `date_grouping` |
+| **ORDER BY fragment** | Common sorting | `date_sort` |
+
+### 6.4 Snippet Best Practices
+
+1. **Always wrap full SELECT snippets** as subqueries:
+   ```yaml
+   sql: |
+     SELECT * FROM ({{snippet:base_sales_query}}) AS src
+   ```
+
+2. **Use WHERE fragments in WHERE/AND positions:**
+   ```yaml
+   sql: |
+     WHERE {{snippet:default_date_filter}}
+     AND {{snippet:user_status_filter}}
+   ```
+
+3. **Use JOIN fragments in FROM/JOIN positions:**
+   ```yaml
+   sql: |
+     FROM users u
+     {{snippet:customer_join}}
+     WHERE {{snippet:default_date_filter}}
+   ```
+
+4. **Never nest snippets** — a snippet's SQL cannot contain `{{snippet:...}}`
+
+5. **Document parameter dependencies** in description:
+   ```yaml
+   description: "Default date filter (requires start_date, end_date params)"
+   ```
+
+6. **Test snippet changes** impact before committing — all consuming reports break if SQL is invalid
+
+7. **Use `--reload-snippets` CLI flag** to verify snippets are loaded correctly:
+   ```bash
+   ./reporting_app --reload-snippets
+   ```
+
+### 6.5 Anti-Patterns to Avoid
+
+- ❌ **Creating huge snippets** — keep them focused and readable
+- ❌ **Using snippets for simple SQL** — only use when reused across 2+ reports
+- ❌ **Hardcoding values in snippets** — use parameters instead
+- ❌ **Ignoring parameter typos** — they surface as runtime errors, not caught early
+- ❌ **Assuming snippet changes are safe** — they propagate immediately to all consumers
+
 ## 7. Summary of Key Conventions
 
 ### 7.1 Mandatory Conventions (MUST FOLLOW)

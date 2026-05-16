@@ -912,6 +912,85 @@ window.ReportApp.on('param-changed', (event) => {
 });
 ```
 
+## 6. SQL Snippets
+
+SQL snippets allow you to reuse SQL code across multiple reports. They are defined as YAML files in the `snippets/` directory and referenced inline in report YAML.
+
+### Creating a Snippet
+
+Create a YAML file in `snippets/`:
+
+```yaml
+name: base_sales_query
+description: "Base query for all sales reports"
+sql: |
+  SELECT s.*, c.region
+  FROM sales s
+  JOIN customers c ON s.id = c.customer_id
+  WHERE s.status = 'active'
+```
+
+**Requirements:**
+- `name` must match the filename (without `.yaml`)
+- `name` must be alphanumeric with underscores/hyphens only
+- `description` is optional metadata (not used in logic)
+- `sql` is required — the SQL fragment
+
+### Referencing Snippets in Reports
+
+Use `{{snippet:name}}` syntax in your report YAML:
+
+```yaml
+datasources:
+  sales_data:
+    database: default
+    sql: |
+      SELECT * FROM ({{snippet:base_sales_query}}) AS src
+      WHERE {{snippet:default_date_filter}}
+```
+
+### Snippet Types
+
+Snippets are **text fragments**, not self-contained SQL. Choose the right type:
+
+| Type | Content | Valid Position | Example |
+|------|---------|----------------|---------|
+| **Full SELECT** | Complete `SELECT ... FROM ...` | `FROM ({{snippet:name}}) AS src` | `base_sales_query` |
+| **WHERE fragment** | `col = 'val' AND ...` | `WHERE {{snippet:name}}` or `AND {{snippet:name}}` | `default_date_filter` |
+| **JOIN fragment** | `JOIN table ON ...` | `FROM users {{snippet:name}}` | `customer_join` |
+| **SELECT fragment** | Column list or expressions | `SELECT {{snippet:name}}` | `user_columns` |
+| **GROUP BY fragment** | `GROUP BY col1, col2` | `... GROUP BY {{snippet:name}}` | `date_grouping` |
+| **ORDER BY fragment** | `ORDER BY col DESC` | `... ORDER BY {{snippet:name}}` | `date_sort` |
+
+### Parameters in Snippets
+
+Snippets may contain `{{param_name}}` references. They are expanded **after** snippet resolution:
+
+```yaml
+# snippets/default_date_filter.yaml
+name: default_date_filter
+sql: |
+  s.date >= '{{start_date}}' AND s.date <= '{{end_date}}'
+```
+
+**Note:** Parameter typos in snippets are runtime errors — no validation is performed.
+
+### CLI: Reload Snippets
+
+```bash
+# Reload snippets from disk and print count + names
+./reporting_app --reload-snippets
+```
+
+### Important Notes
+
+- **No versioning** — snippets are always resolved from latest file content
+- **No nesting** — a snippet's SQL cannot contain `{{snippet:...}}`
+- **No parameters in snippet names** — names must be alphanumeric with underscores/hyphens
+- **Global scope** — any report can reference any snippet
+- **Breaking changes propagate immediately** — no migration, no pinning
+- **Trust model** — snippets are trusted input, same as `report.yaml` SQL
+
 ## 7. Common Issues & Solutions
 
 ### Issue 1: "Thick client not available"

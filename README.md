@@ -245,6 +245,35 @@ const isImmutable = window.ReportApp.isImmutable('organization_id');
 
 **Note:** All defaults match previous hardcoded values for zero‑downtime migration.
 
+#### Snippets Configuration (Phase 2)
+
+SQL snippets are reusable code blocks stored as YAML files in a `snippets/` directory. Reports reference them inline in their SQL using `{{snippet:name}}` syntax.
+
+- `SNIPPETS_DIR` - Directory containing snippet YAML files (default: `./snippets`)
+
+**Example snippet file** (`snippets/base_sales_query.yaml`):
+```yaml
+name: base_sales_query
+description: "Base query for all sales reports"
+sql: |
+  SELECT s.*, c.region
+  FROM sales s
+  JOIN customers c ON s.id = c.customer_id
+  WHERE s.status = 'active'
+```
+
+**Usage in report.yaml:**
+```yaml
+datasources:
+  sales_data:
+    database: default
+    sql: |
+      SELECT * FROM ({{snippet:base_sales_query}}) AS src
+      WHERE {{snippet:default_date_filter}}
+```
+
+**CLI flag:** `--reload-snippets` — Reloads snippets from disk and prints count + names.
+
 ### Database Configuration
 Edit `databases.yaml`:
 
