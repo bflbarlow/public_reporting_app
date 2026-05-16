@@ -48,6 +48,7 @@ datasources:
         COUNT(DISTINCT o.orderNumber) as order_count,
         SUM(od.quantityOrdered * od.priceEach) as total_revenue,
         AVG(od.quantityOrdered * od.priceEach) as avg_order_value
+        -- {{snippet:testing}} as avg_order_value
       FROM customers c
       LEFT JOIN orders o ON c.customerNumber = o.customerNumber
       LEFT JOIN orderdetails od ON o.orderNumber = od.orderNumber
