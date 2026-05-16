@@ -115,6 +115,37 @@ Each datasource can optionally specify its own database via `datasources.{name}.
 - Database names must exist in `databases.yaml` — validation errors are logged at startup but the report still loads (runtime will fail with a clear error if the DB doesn't exist)
 - This validation is a **startup-time warning only** — it does not block report loading, ensuring zero breaking changes for existing reports
 
+### 8. SQL Snippets Security
+
+SQL snippets are a **trusted input** mechanism — the same trust model as `report.yaml` SQL.
+
+#### How Snippets Work
+
+- Snippets are YAML files in the `snippets/` directory (configurable via `SNIPPETS_DIR` env var)
+- Reports reference snippets inline: `{{snippet:name}}`
+- At query time, snippets are loaded from disk and expanded wholesale
+- Snippet SQL is inserted before parameter substitution
+
+#### Security Considerations
+
+| Risk | Mitigation |
+|------|------------|
+| **Malicious snippet content** | Same trust model as `report.yaml` — anyone with repo access can edit snippets |
+| **SQL injection via snippets** | Snippets are trusted input; no new attack surface beyond existing report SQL |
+| **Parameter name collision** | Snippets may contain `{{param_name}}` that conflicts with report params; documented as a known limitation |
+| **Breaking changes** | No versioning — changes propagate immediately to all consuming reports |
+
+#### Trust Boundary
+
+Snippets are **not** a security feature. They are a developer convenience for code reuse. The security model remains:
+
+1. **HMAC signatures** — protect the URL chain
+2. **Nonce tracking** — prevent replay
+3. **Immutable parameters** — protected by HMAC
+4. **Database permissions** — read-only connections
+
+Snippets do **not** add or remove any security controls. They simply allow SQL code reuse across reports.
+
 ### 8. Configurable Security Parameters (Phase 1)
 
 All security timeouts and limits are now configurable via environment variables:

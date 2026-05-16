@@ -26,6 +26,7 @@ type EmbedHandler struct {
 	allowOrigins    []string
 	allowedCDNs     []string
 	securityConfig  core.SecurityConfig
+	snippets        map[string]*loader.Snippet
 }
 
 // NewEmbedHandler creates a new embed handler.
@@ -49,6 +50,11 @@ func NewEmbedHandler(
 		allowedCDNs:     allowedCDNs,
 		securityConfig:  securityConfig,
 	}
+}
+
+// SetSnippets sets the snippets map for this handler.
+func (h *EmbedHandler) SetSnippets(snippets map[string]*loader.Snippet) {
+	h.snippets = snippets
 }
 
 // ServeHTTP renders a report for iframe embedding

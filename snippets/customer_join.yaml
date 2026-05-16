@@ -1,0 +1,4 @@
+name: customer_join
+description: "JOIN customers table"
+sql: |
+  LEFT JOIN customers c ON c.id = u.customer_id

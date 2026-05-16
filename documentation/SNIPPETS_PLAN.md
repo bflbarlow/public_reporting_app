@@ -1,8 +1,8 @@
 # SQL Snippets: Plan
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Date:** 2026-05-15  
-**Status:** Design Plan — Awaiting Approval
+**Status:** Implemented — Active Feature
 
 ---
 
@@ -11,6 +11,8 @@
 SQL snippets are reusable blocks of SQL code stored as individual YAML files in a `snippets/` directory. Reports reference snippets inline in their SQL using `{{snippet:name}}` syntax. At query time, the server resolves these references by reading the corresponding snippet files and performing wholesale text replacement.
 
 **Goal:** One place to change a piece of SQL that can impact multiple reports, without requiring versioning, parameter injection, or complex tooling.
+
+**Status:** ✅ **Implemented** (2026-05-15)
 
 **Scope:** This is a read-only, file-based feature. No database tables, no API endpoints, no UI. Anyone with repository access can create or edit snippets.
 

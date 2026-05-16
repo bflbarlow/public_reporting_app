@@ -1,0 +1,4 @@
+name: user_status_filter
+description: "Filter by user status"
+sql: |
+  u.status = 'active'
