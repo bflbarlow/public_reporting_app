@@ -1,0 +1,193 @@
+id: classic_models_perfect
+name: "ClassicModels Nexus"
+description: "A futuristic command center dashboard transforming ClassicModels data into a neon-lit galactic operations experience"
+database: classicmodels
+visibility: public
+expires_after: 7200
+max_rows: 5000
+
+immutable_params:
+  - dummy_param
+
+mutable_params:
+  - product_line
+  - country
+  - min_price
+  - max_price
+  - status_filter
+
+datasources:
+  gallery_products:
+    database: classicmodels
+    sql: |
+      SELECT 
+        p.productCode,
+        p.productName,
+        p.productLine,
+        p.productScale,
+        p.productVendor,
+        p.quantityInStock,
+        p.buyPrice,
+        p.MSRP,
+        ROUND(p.MSRP - p.buyPrice, 2) AS profit_margin,
+        ROUND(((p.MSRP - p.buyPrice) / p.buyPrice) * 100, 1) AS margin_percent,
+        COALESCE(SUM(od.quantityOrdered), 0) AS units_sold,
+        COALESCE(SUM(od.quantityOrdered * od.priceEach), 0) AS total_revenue,
+        COALESCE(SUM(od.quantityOrdered * p.buyPrice), 0) AS total_cost,
+        CASE
+          WHEN COALESCE(SUM(od.quantityOrdered), 0) >= 500 THEN 'Well Stocked'
+          WHEN COALESCE(SUM(od.quantityOrdered), 0) >= 100 THEN 'Moderate'
+          ELSE 'Limited'
+        END AS stock_status
+      FROM products p
+      LEFT JOIN orderdetails od ON p.productCode = od.productCode
+      WHERE ({{product_line}} IS NULL OR p.productLine = {{product_line}})
+        AND ({{min_price}} IS NULL OR p.MSRP >= {{min_price}})
+        AND ({{max_price}} IS NULL OR p.MSRP <= {{max_price}})
+      GROUP BY p.productCode, p.productName, p.productLine, p.productScale, p.productVendor, p.quantityInStock, p.buyPrice, p.MSRP
+      ORDER BY total_revenue DESC
+    row_limit: 200
+
+  revenue_waterfall:
+    database: classicmodels
+    sql: |
+      SELECT 
+        p.productLine,
+        SUM(od.quantityOrdered) AS total_units,
+        SUM(od.quantityOrdered * od.priceEach) AS total_revenue,
+        SUM(od.quantityOrdered * p.buyPrice) AS total_cost,
+        ROUND(SUM(od.quantityOrdered * od.priceEach) - SUM(od.quantityOrdered * p.buyPrice), 2) AS total_profit,
+        ROUND(AVG(od.priceEach), 2) AS avg_selling_price,
+        COUNT(DISTINCT od.productCode) AS product_count,
+        ROUND(SUM(od.quantityOrdered * od.priceEach) / (SELECT SUM(od2.quantityOrdered * od2.priceEach) FROM orderdetails od2 JOIN orders o2 ON od2.orderNumber = o2.orderNumber), 4) AS revenue_share
+      FROM orderdetails od
+      JOIN orders o ON od.orderNumber = o.orderNumber
+      JOIN products p ON od.productCode = p.productCode
+      WHERE ({{product_line}} IS NULL OR p.productLine = {{product_line}})
+      GROUP BY p.productLine
+      ORDER BY total_revenue DESC
+    row_limit: 20
+    cache_ttl: 300
+
+  sales_velocity:
+    database: classicmodels
+    sql: |
+      SELECT 
+        DATE_FORMAT(o.orderDate, '%Y-%m') AS month,
+        DATE_FORMAT(o.orderDate, '%b %Y') AS month_label,
+        COUNT(DISTINCT o.orderNumber) AS order_count,
+        SUM(od.quantityOrdered) AS units_sold,
+        SUM(od.quantityOrdered * od.priceEach) AS monthly_revenue,
+        COUNT(DISTINCT o.customerNumber) AS active_customers,
+        ROUND(AVG(od.priceEach), 2) AS avg_order_value
+      FROM orders o
+      JOIN orderdetails od ON o.orderNumber = od.orderNumber
+      GROUP BY 1, 2
+      ORDER BY 1
+    row_limit: 50
+    cache_ttl: 600
+
+  customer_satisfaction:
+    database: classicmodels
+    sql: |
+      SELECT 
+        c.country,
+        COUNT(DISTINCT c.customerNumber) AS customer_count,
+        ROUND(AVG(c.creditLimit), 0) AS avg_credit_limit,
+        COALESCE(SUM(p.amount), 0) AS total_payments,
+        COALESCE(AVG(p.amount), 0) AS avg_payment,
+        COUNT(DISTINCT CASE WHEN p.amount > 10000 THEN c.customerNumber END) AS high_value_customers,
+        COUNT(DISTINCT CASE WHEN p.amount BETWEEN 5000 AND 10000 THEN c.customerNumber END) AS mid_value_customers,
+        COUNT(DISTINCT CASE WHEN p.amount < 5000 THEN c.customerNumber END) AS standard_customers,
+        COUNT(DISTINCT c.salesRepEmployeeNumber) AS active_sales_reps
+      FROM customers c
+      LEFT JOIN payments p ON c.customerNumber = p.customerNumber
+      WHERE ({{country}} IS NULL OR c.country = {{country}})
+      GROUP BY c.country
+      ORDER BY total_payments DESC
+    row_limit: 30
+
+  order_status:
+    database: classicmodels
+    sql: |
+      SELECT 
+        status,
+        COUNT(*) AS order_count,
+        ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM orders), 1) AS percentage,
+        ROUND(AVG(DATEDIFF(shippedDate, orderDate)), 1) AS avg_ship_days,
+        ROUND(AVG(DATEDIFF(requiredDate, orderDate)), 1) AS avg_required_days
+      FROM orders
+      WHERE ({{status_filter}} IS NULL OR status = {{status_filter}})
+      GROUP BY status
+      ORDER BY order_count DESC
+    row_limit: 20
+
+  employee_territory:
+    database: classicmodels
+    sql: |
+      SELECT 
+        CONCAT(e.firstName, ' ', e.lastName) AS employee_name,
+        e.jobTitle,
+        o.city AS office_city,
+        o.country AS office_country,
+        o.territory,
+        COUNT(DISTINCT c.customerNumber) AS customers_assigned,
+        COALESCE(SUM(p.amount), 0) AS total_collected,
+        ROUND(AVG(c.creditLimit), 0) AS avg_customer_credit,
+        COUNT(DISTINCT CASE WHEN p.amount > 10000 THEN p.checkNumber END) AS large_payments,
+        COUNT(DISTINCT CASE WHEN p.amount BETWEEN 1000 AND 10000 THEN p.checkNumber END) AS medium_payments
+      FROM employees e
+      LEFT JOIN customers c ON e.employeeNumber = c.salesRepEmployeeNumber
+      LEFT JOIN payments p ON c.customerNumber = p.customerNumber
+      LEFT JOIN offices o ON e.officeCode = o.officeCode
+      WHERE e.jobTitle LIKE '%Sales%' OR e.jobTitle LIKE '%VP%'
+      GROUP BY e.employeeNumber, e.firstName, e.lastName, e.jobTitle, o.city, o.country, o.territory
+      ORDER BY total_collected DESC
+    row_limit: 30
+
+  customer_credit_tiers:
+    database: classicmodels
+    sql: |
+      SELECT 
+        CASE 
+          WHEN creditLimit >= 100000 THEN 'Platinum'
+          WHEN creditLimit >= 50000 THEN 'Gold'
+          WHEN creditLimit >= 20000 THEN 'Silver'
+          ELSE 'Bronze'
+        END AS credit_tier,
+        COUNT(DISTINCT c.customerNumber) AS customer_count,
+        ROUND(AVG(creditLimit), 0) AS avg_credit,
+        ROUND(COALESCE(SUM(pay.total_amount), 0), 0) AS total_paid,
+        ROUND(COALESCE(AVG(pay.avg_amount), 0), 0) AS avg_payment
+      FROM customers c
+      LEFT JOIN (
+        SELECT customerNumber, SUM(amount) AS total_amount, AVG(amount) AS avg_amount
+        FROM payments
+        GROUP BY customerNumber
+      ) pay ON c.customerNumber = pay.customerNumber
+      GROUP BY credit_tier
+      ORDER BY 
+        CASE credit_tier
+          WHEN 'Platinum' THEN 1
+          WHEN 'Gold' THEN 2
+          WHEN 'Silver' THEN 3
+          WHEN 'Bronze' THEN 4
+        END
+    row_limit: 10
+
+  product_scale_distribution:
+    database: classicmodels
+    sql: |
+      SELECT 
+        p.productScale AS scale,
+        COUNT(*) AS product_count,
+        COUNT(DISTINCT p.productLine) AS line_count,
+        ROUND(AVG(p.MSRP), 2) AS avg_msrp,
+        ROUND(AVG(p.buyPrice), 2) AS avg_buy_price,
+        COALESCE(SUM(od.quantityOrdered), 0) AS total_sold,
+        COALESCE(SUM(od.quantityOrdered * od.priceEach), 0) AS total_revenue
+      FROM products p
+      LEFT JOIN orderdetails od ON p.productCode = od.productCode
+      GROUP BY p.productScale
+      ORDER BY total_revenue DESC
+    row_limit: 20

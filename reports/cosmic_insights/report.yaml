@@ -1,0 +1,109 @@
+id: cosmic_insights
+name: "Cosmic Insights"
+description: >
+  A cinematic, galaxy‑themed dashboard that transforms your SQL data into
+  constellations, nebulae, and cosmic KPIs.
+database: classicmodels
+visibility: public
+expires_after: 3600
+max_rows: 10000
+
+# Add dummy immutable parameter for HMAC signature security
+immutable_params:
+  - dummy_param
+
+mutable_params:
+  - dimension
+
+datasources:
+  cosmic_kpis:
+    database: classicmodels
+    description: "KPIs aggregated by selected dimension (category, region, or status)"
+    sql: |
+      SELECT
+        CASE
+          WHEN {{dimension}} = 'category' THEN pl.productLine
+          WHEN {{dimension}} = 'region' THEN c.country
+          ELSE o.status
+        END AS dim,
+        COUNT(DISTINCT o.orderNumber) AS total_count,
+        SUM(od.quantityOrdered * od.priceEach) AS total_amount,
+        AVG(od.quantityOrdered * od.priceEach) AS avg_amount
+      FROM orders o
+      JOIN orderdetails od ON o.orderNumber = od.orderNumber
+      JOIN customers c ON o.customerNumber = c.customerNumber
+      LEFT JOIN products p ON od.productCode = p.productCode
+      LEFT JOIN productlines pl ON p.productLine = pl.productLine
+      GROUP BY dim
+      ORDER BY total_count DESC
+    row_limit: 100
+
+  cosmic_timeseries:
+    database: classicmodels
+    description: "Daily order count and revenue timeseries"
+    sql: |
+      SELECT
+        DATE(orderDate) AS day,
+        COUNT(DISTINCT o.orderNumber) AS total_orders,
+        SUM(od.quantityOrdered * od.priceEach) AS total_amount
+      FROM orders o
+      JOIN orderdetails od ON o.orderNumber = od.orderNumber
+      GROUP BY DATE(orderDate)
+      ORDER BY day
+    row_limit: 500
+
+  cosmic_table:
+    database: classicmodels
+    description: "Detailed order list with dimension categorization"
+    sql: |
+      SELECT
+        o.orderNumber AS id,
+        c.customerName AS customer_name,
+        CASE
+          WHEN {{dimension}} = 'category' THEN p.productLine
+          WHEN {{dimension}} = 'region' THEN c.country
+          ELSE o.status
+        END AS dim,
+        SUM(od.quantityOrdered * od.priceEach) AS amount,
+        o.orderDate AS created_at
+      FROM orders o
+      JOIN orderdetails od ON o.orderNumber = od.orderNumber
+      JOIN customers c ON o.customerNumber = c.customerNumber
+      LEFT JOIN products p ON od.productCode = p.productCode
+      GROUP BY o.orderNumber, c.customerName, dim, o.orderDate
+      ORDER BY o.orderDate DESC
+      LIMIT 200
+    row_limit: 200
+
+# Chart and table metadata (for documentation / future auto-rendering)
+charts:
+  kpi_constellation:
+    type: doughnut
+    datasource: cosmic_kpis
+    label_column: dim
+    value_column: total_count
+    options:
+      cutout: 70
+      plugins:
+        legend:
+          position: bottom
+
+  nebula_timeseries:
+    type: line
+    datasource: cosmic_timeseries
+    x_column: day
+    y_column: total_amount
+    options:
+      tension: 0.4
+      fill: true
+      borderWidth: 3
+
+tables:
+  cosmic_table:
+    datasource: cosmic_table
+    columns:
+      - id
+      - customer_name
+      - dim
+      - amount
+      - created_at
