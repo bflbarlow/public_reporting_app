@@ -1,0 +1,38 @@
+2026/05/17 12:41:03 📦 Loaded 5 snippets from ./snippets
+2026/05/17 12:41:03 Loaded report: classic_models_perfect (Classic Models - Automotive Gallery)
+2026/05/17 12:41:03 Loaded report: cosmic_insights (Cosmic Insights)
+2026/05/17 12:41:03 Loaded report: customer_program_insights (Program Insights Dashboard)
+2026/05/17 12:41:03 Loaded report: customer_referral_analytics (Customer Referral Analytics)
+2026/05/17 12:41:03 Loaded report: customer_seeker_analytics (Seeker Analytics Dashboard)
+2026/05/17 12:41:03 Loaded report: customer_sql_reporting (Customer Journey Analytics)
+2026/05/17 12:41:03 Loaded report: example_dashboard (Example Dashboard)
+2026/05/17 12:41:03 Loaded report: program_analysis (Program Analysis Dashboard)
+2026/05/17 12:41:03 Loaded report: program_analysis_v2 (Program Analysis Dashboard)
+2026/05/17 12:41:03 Loaded report: referral_funnel_dashboard (Referral Funnel & Engagement Dashboard)
+2026/05/17 12:41:03 Loaded report: referral_reactor (Referral Reactor Core)
+2026/05/17 12:41:03 Warning: report report_template validation failed: datasource data_summary: SQL references undeclared parameter 'parameter_name' (loaded anyway)
+2026/05/17 12:41:03 Loaded report: report_template (Report Template)
+2026/05/17 12:41:03 Loaded report: seeker_universe (Seeker Universe Hologram)
+2026/05/17 12:41:03 Loaded report: simple_multi_db_report (Multi-Database Cross-Reference)
+2026/05/17 12:41:03 Warning: report simple_multi_value_param_report validation failed: datasource country_sales: SQL references undeclared parameter 'snippet' (loaded anyway)
+2026/05/17 12:41:03 Loaded report: simple_multi_value_param_report (Multi-Value Parameter Test (ClassicModels))
+2026/05/17 12:41:03 Loaded 15 reports
+2026/05/17 12:41:03 Query logging enabled: ./query_log
+2026/05/17 12:41:03 📝 Query logging enabled: ./query_log
+2026/05/17 12:41:03 warning: database "default" ping failed: Error 1049 (42000): Unknown database 'testdb'
+2026/05/17 12:41:03 Database connection "default" ready
+2026/05/17 12:41:03 Database connection "classicmodels" ready
+2026/05/17 12:41:03 Database connection "customer_sql" ready
+2026/05/17 12:41:03 🔒 Security enabled (HMAC, nonce, expiry validation)
+2026/05/17 12:41:03 🔒 Security: URL expiry [1m0s - 24h0m0s], default 5m0s
+2026/05/17 12:41:03 🔒 Security: Nonce 32 bytes (urlsafe-base64), max age 24h0m0s, max uses 1
+2026/05/17 12:41:03 🔒 Security: Refresh grace 0s
+2026/05/17 12:41:03 🌐 CSP frame-ancestors: 'self' * http://localhost:9090 http://localhost:8080
+2026/05/17 12:41:03 📦 Allowed CDNs: https://cdn.jsdelivr.net, https://cdn.plot.ly
+2026/05/17 12:41:03 Server starting on port 8080
+2026/05/17 12:41:03 Server listening on :8080
+2026/05/17 12:41:08 GET /api/embed
+2026/05/17 12:41:08 GET /api/embed completed in 2.077833ms
+2026/05/17 12:41:08 GET /static/thick_client.js
+2026/05/17 12:41:08 GET /static/thick_client.js completed in 3.321167ms
+signal: killed

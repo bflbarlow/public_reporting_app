@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic Models - Automotive Gallery</title>
+<script src="/static/thick_client.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{--bg:#faf8f5;--text:#2c2c2c;--accent:#c8a45e;--accent2:#8b6914;--card:#fff;--border:#e8e2d8;--muted:#999;--success:#5a8a5a;--warning:#c8a45e;--danger:#b85a5a;--font-heading:'Georgia',serif;--font-body:'-apple-system','BlinkMacSystemFont','Segoe UI','Roboto','Helvetica Neue',Arial,sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-body);background:var(--bg);color:var(--text);line-height:1.6}
+.container{max-width:1400px;margin:0 auto;padding:20px}
+header{text-align:center;padding:50px 20px 30px;border-bottom:1px solid var(--border)}
+header h1{font-family:var(--font-heading);font-size:3.2rem;font-weight:700;letter-spacing:2px;color:var(--accent2)}
+header p{font-size:1.1rem;color:var(--muted);margin-top:8px;font-style:italic}
+.filters{display:flex;gap:15px;flex-wrap:wrap;justify-content:center;padding:25px;background:var(--card);border:1px solid var(--border);border-radius:8px;margin:25px 0;align-items:flex-end}
+.filters label{font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+.filters select,.filters input{padding:8px 12px;border:1px solid var(--border);border-radius:4px;font-family:var(--font-body);font-size:.95rem;background:#fff;min-width:160px}
+.filters button{padding:10px 28px;background:var(--accent);color:#fff;border:none;border-radius:4px;font-weight:600;cursor:pointer;letter-spacing:1px;font-size:.9rem;transition:background .2s}
+.filters button:hover{background:var(--accent2)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:20px;margin:25px 0}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:25px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.card h2{font-family:var(--font-heading);font-size:1.4rem;color:var(--accent2);margin-bottom:5px;border-bottom:2px solid var(--accent);padding-bottom:10px}
+.card .subtitle{font-size:.85rem;color:var(--muted);margin-bottom:15px}
+canvas{max-height:300px}
+.stats{display:flex;gap:30px;justify-content:center;padding:20px;flex-wrap:wrap}
+.stat{text-align:center}
+.stat .value{font-family:var(--font-heading);font-size:2.5rem;color:var(--accent2)}
+.stat .label{font-size:.85rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:15px;margin:20px 0}
+.gallery-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:20px;transition:transform .2s,box-shadow .2s;cursor:default}
+.gallery-card:hover{transform:translateY(-4px);box-shadow:0 8px 20px rgba(0,0,0,.08)}
+.gallery-card h3{font-family:var(--font-heading);font-size:1.15rem;color:var(--accent2);margin-bottom:8px}
+.gallery-card .meta{font-size:.8rem;color:var(--muted);margin-bottom:10px}
+.gallery-card .price{font-size:1.3rem;font-weight:600;color:var(--accent)}
+.gallery-card .margin{font-size:.85rem;color:var(--success)}
+.gallery-card .stock{font-size:.8rem;padding:3px 8px;border-radius:10px;display:inline-block;margin-top:8px}
+.stock.Well Stocked{background:#e8f5e8;color:#5a8a5a}
+.stock.Moderate{background:#fff8e1;color:#c8a45e}
+.stock.Limited{background:#fce4e4;color:#b85a5a}
+.heatmap{display:grid;grid-template-columns:140px repeat(3,1fr);gap:4px;font-size:.85rem}
+.heatmap-header{font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:8px}
+.heatmap-row{display:contents}
+.heatmap-cell{padding:10px;text-align:center;border-radius:4px;font-weight:500}
+.heatmap-label{text-align:right;padding-right:10px;display:flex;align-items:center;justify-content:flex-end;gap:6px;font-weight:500}
+.heatmap-dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.leaderboard{list-style:none}
+.leaderboard li{display:flex;justify-content:space-between;align-items:center;padding:12px 15px;border-bottom:1px solid var(--border)}
+.leaderboard li:last-child{border-bottom:none}
+.leaderboard .name{font-weight:500}
+.leaderboard .title{font-size:.8rem;color:var(--muted)}
+.leaderboard .amount{font-family:var(--font-heading);font-size:1.2rem;color:var(--accent2)}
+.order-status{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.status-badge{padding:10px 18px;border-radius:20px;font-weight:500;font-size:.9rem;border:2px solid}
+.status-badge.Shipped{background:#e8f5e8;color:#5a8a5a;border-color:#5a8a5a}
+.status-badge.Cancelled{background:#fce4e4;color:#b85a5a;border-color:#b85a5a}
+.status-badge.on-hold{background:#fff8e1;color:#c8a45e;border-color:#c8a45e}
+.status-badge.Disputed{background:#f3e5f6;color:#7b3fa0;border-color:#7b3fa0}
+.status-badge.Resolved{background:#e3f2fd;color:#1976d2;border-color:#1976d2}
+.legend{display:flex;gap:15px;flex-wrap:wrap;margin-top:10px;justify-content:center}
+.legend-item{font-size:.8rem;display:flex;align-items:center;gap:5px}
+.legend-dot{width:12px;height:12px;border-radius:50%;display:inline-block}
+footer{text-align:center;padding:30px;color:var(--muted);font-size:.85rem;border-top:1px solid var(--border);margin-top:30px}
+.loading{text-align:center;padding:60px;color:var(--muted)}
+.loading-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);opacity:0.95;display:flex;align-items:center;justify-content:center;z-index:1000}
+.loading-spinner{width:50px;height:50px;border:4px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.error-banner{background:#fce4e4;color:#b85a5a;padding:15px;border-radius:8px;text-align:center;margin:20px 0;display:none}
+@media(max-width:768px){header h1{font-size:2rem}.grid{grid-template-columns:1fr}.filters{flex-direction:column;align-items:stretch}.stats{gap:15px}.stat .value{font-size:1.8rem}}
+</style>
+</head>
+<body>
+<div class="loading-overlay" id="loadingOverlay"><div class="loading-spinner"></div></div>
+<div class="container">
+<header>
+<h1>Classic Models</h1>
+<p>An Automotive Gallery — Curating 110 Iconic Scale Models</p>
+</header>
+<div class="error-banner" id="errorBanner"></div>
+<div class="stats" id="kpiStats">
+<div class="stat"><div class="value" id="statProducts">—</div><div class="label">Products</div></div>
+<div class="stat"><div class="value" id="statRevenue">—</div><div class="label">Revenue</div></div>
+<div class="stat"><div class="value" id="statCustomers">—</div><div class="label">Customers</div></div>
+<div class="stat"><div class="value" id="statOrders">—</div><div class="label">Orders</div></div>
+<div class="stat"><div class="value" id="statAvgMargin">—</div><div class="label">Avg Margin</div></div>
+</div>
+<div class="filters">
+<div><label>Product Line</label><br><select id="filterProductLine"><option value="">All Lines</option><option>Classic Cars</option><option>Motorcycles</option><option>Planes</option><option>Ships</option><option>Trains</option><option>Trucks and Buses</option><option>Vintage Cars</option></select></div>
+<div><label>Country</label><br><select id="filterCountry"><option value="">All Countries</option></select></div>
+<div><label>Min Price</label><br><input type="number" id="filterMinPrice" placeholder="0" min="0"></div>
+<div><label>Max Price</label><br><input type="number" id="filterMaxPrice" placeholder="500" min="0"></div>
+<button onclick="applyFilters()">Apply Filters</button>
+<button onclick="resetFilters()" style="background:#ccc;color:#333">Reset</button>
+</div>
+<div class="grid">
+<div class="card"><h2>Revenue Waterfall</h2><p class="subtitle">Revenue by product line</p><canvas id="waterfallChart"></canvas></div>
+<div class="card"><h2>Sales Velocity</h2><p class="subtitle">Monthly revenue trends</p><canvas id="velocityChart"></canvas></div>
+<div class="card"><h2>Profitability Scatter</h2><p class="subtitle">Cost vs MSRP — bubble size = revenue</p><canvas id="scatterChart"></canvas></div>
+<div class="card"><h2>Customer Credit Tiers</h2><p class="subtitle">Distribution by credit limit</p><canvas id="creditChart"></canvas></div>
+<div class="card"><h2>Order Status</h2><p class="subtitle">Current order distribution</p><div id="orderStatusBadges" class="order-status"></div><div id="orderStatusLegend" class="legend"></div></div>
+<div class="card"><h2>Customer Satisfaction Heatmap</h2><p class="subtitle">Country × Payment tier</p><div id="heatmapContainer" class="heatmap"></div></div>
+</div>
+<div class="card" style="margin:25px 0"><h2>Employee Territory Performance</h2><p class="subtitle">Top performers by collection</p><ul class="leaderboard" id="employeeList"></ul></div>
+<div class="card" style="margin:25px 0"><h2>Product Gallery</h2><p class="subtitle">Curated collection — <span id="galleryCount">0</span> models</p><div class="gallery" id="galleryGrid"></div></div>
+<footer>Classic Models Automotive Gallery &middot; Data sourced from ClassicModels database &middot; Built with care</footer>
+</div>
+<script>
+let reportData={};let waterfallChart,velocityChart,scatterChart,creditChart;
+const goldPalette=['#c8a45e','#8b6914','#d4b76a','#a68530','#e0c878','#7a5c10','#b8963e','#9e7d28'];
+const tierColors={'Platinum':'#e5e4e2','Gold':'#c8a45e','Silver':'#c0c0c0','Bronze':'#cd7f32'};
+const orderStatusColors={'Shipped':'#5a8a5a','Cancelled':'#b85a5a','On Hold':'#c8a45e','Disputed':'#7b3fa0','Resolved':'#1976d2'};
+document.addEventListener('DOMContentLoaded',async function(){
+if(!window.ReportApp||typeof window.ReportApp.refresh!=='function'){showError('Thick client not available.');return}
+await init();
+});
+async function init(){
+const overlay=document.getElementById('loadingOverlay');
+overlay.style.display='flex';
+try{await loadData();updateKPIs();updateWaterfall();updateVelocity();updateScatter();updateCredit();updateOrderStatus();updateHeatmap();updateEmployees();updateGallery();}
+catch(e){showError('Failed to load: '+e.message);console.error(e)}
+finally{overlay.style.display='none'}
+}
+async function loadData(p){
+const data=await window.ReportApp.refresh(p||{});
+reportData=data;
+if(data.customer_satisfaction&&data.customer_satisfaction.rows){
+const sel=document.getElementById('filterCountry');
+const countries=[...new Set(data.customer_satisfaction.rows.map(function(r){return r.country}))];
+countries.forEach(function(c){const o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o)})}
+return data;
+}
+function updateKPIs(){
+let prods=0,revenue=0,custs=0,orders=0,totalMargin=0;
+if(reportData.gallery_products&&reportData.gallery_products.rows)prods=reportData.gallery_products.rows.length;
+if(reportData.revenue_waterfall&&reportData.revenue_waterfall.rows)revenue=reportData.revenue_waterfall.rows.reduce(function(s,r){return s+parseFloat(r.total_revenue||0)},0);
+if(reportData.customer_satisfaction&&reportData.customer_satisfaction.rows)custs=reportData.customer_satisfaction.rows.reduce(function(s,r){return s+parseInt(r.customer_count||0)},0);
+if(reportData.sales_velocity&&reportData.sales_velocity.rows)orders=reportData.sales_velocity.rows.reduce(function(s,r){return s+parseInt(r.order_count||0)},0);
+if(reportData.gallery_products&&reportData.gallery_products.rows)totalMargin=reportData.gallery_products.rows.reduce(function(s,r){return s+parseFloat(r.margin_percent||0)},0);
+document.getElementById('statProducts').textContent=prods.toLocaleString();
+document.getElementById('statRevenue').textContent='$'+Math.round(revenue).toLocaleString();
+document.getElementById('statCustomers').textContent=custs.toLocaleString();
+document.getElementById('statOrders').textContent=orders.toLocaleString();
+document.getElementById('statAvgMargin').textContent=(prods?totalMargin/prods:0).toFixed(1)+'%';
+}
+function updateWaterfall(){
+const ctx=document.getElementById('waterfallChart').getContext('2d');
+if(waterfallChart)waterfallChart.destroy();
+const d=reportData.revenue_waterfall;
+if(!d||!d.rows.length)return;
+waterfallChart=new Chart(ctx,{type:'bar',data:{labels:d.rows.map(function(r){return r.productLine}),datasets:[{label:'Revenue',data:d.rows.map(function(r){return r.total_revenue}),backgroundColor:goldPalette},{label:'Cost',data:d.rows.map(function(r){return r.total_cost}),backgroundColor:'#d4c5a0'},{label:'Profit',data:d.rows.map(function(r){return r.total_profit}),backgroundColor:'#5a8a5a'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{family:'Inter'}}}},scales:{x:{grid:{display:false},ticks:{font:{family:'Inter'}}},y:{grid:{color:'#f0ece4'},ticks:{font:{family:'Inter'},callback:function(v){return '$'+(v/1000).toFixed(0)+'k'}}}}});
+}
+function updateVelocity(){
+const ctx=document.getElementById('velocityChart').getContext('2d');
+if(velocityChart)velocityChart.destroy();
+const d=reportData.sales_velocity;
+if(!d||!d.rows.length)return;
+velocityChart=new Chart(ctx,{type:'line',data:{labels:d.rows.map(function(r){return r.month}),datasets:[{label:'Revenue',data:d.rows.map(function(r){return r.monthly_revenue}),borderColor:'#c8a45e',backgroundColor:'rgba(200,164,94,0.1)',fill:true,tension:.4,pointRadius:3,pointBackgroundColor:'#c8a45e'},{label:'Orders',data:d.rows.map(function(r){return r.order_count}),borderColor:'#8b6914',backgroundColor:'rgba(139,105,20,0.1)',fill:true,tension:.4,pointRadius:3,pointBackgroundColor:'#8b6914',yAxisID:'y1'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{family:'Inter'}}}},scales:{x:{grid:{display:false},ticks:{font:{family:'Inter'}}},y:{position:'left',grid:{color:'#f0ece4'},ticks:{font:{family:'Inter'},callback:function(v){return '$'+(v/1000).toFixed(0)+'k'}}},y1:{position:'right',grid:{display:false},ticks:{font:{family:'Inter'}}}}}}});
+}
+function updateScatter(){
+const ctx=document.getElementById('scatterChart').getContext('2d');
+if(scatterChart)scatterChart.destroy();
+const d=reportData.profitability_scatter;
+if(!d||!d.rows.length)return;
+const maxRev=Math.max(...d.rows.map(function(r){return r.total_revenue}));
+scatterChart=new Chart(ctx,{type:'bubble',data:{datasets:d.rows.slice(0,60).map(function(r){return {label:r.productName,x:r.buyPrice,y:r.MSRP,r:Math.sqrt(r.total_revenue/maxRev)*12+3,backgroundColor:'rgba(200,164,94,0.5)',borderColor:'#c8a45e'}})},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){return ctx.raw.label+' ($'+Math.round(ctx.raw.y)+' MSRP)'}}}}},scales:{x:{title:{display:true,text:'Cost ($)',font:{family:'Inter'}},grid:{color:'#f0ece4'}},y:{title:{display:true,text:'MSRP ($)',font:{family:'Inter'}},grid:{color:'#f0ece4'}}}}});
+}
+function updateCredit(){
+const ctx=document.getElementById('creditChart').getContext('2d');
+if(creditChart)creditChart.destroy();
+const d=reportData.customer_credit_tiers;
+if(!d||!d.rows.length)return;
+creditChart=new Chart(ctx,{type:'doughnut',data:{labels:d.rows.map(function(r){return r.credit_tier}),datasets:[{data:d.rows.map(function(r){return r.customer_count}),backgroundColor:Object.keys(tierColors).map(function(t){return tierColors[t]}),borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{family:'Inter'}}}}}}});
+}
+function updateOrderStatus(){
+const d=reportData.order_status;
+const cont=document.getElementById('orderStatusBadges');
+const leg=document.getElementById('orderStatusLegend');
+cont.innerHTML='';leg.innerHTML='';
+if(!d||!d.rows.length)return;
+d.rows.forEach(function(r){
+const badge=document.createElement('span');
+badge.className='status-badge '+r.status.replace(' ','-').toLowerCase();
+badge.textContent=r.status+' ('+r.order_count+')';
+cont.appendChild(badge);
+const item=document.createElement('span');
+item.className='legend-item';
+const sc=orderStatusColors[r.status]||'#c8a45e';
+item.innerHTML='<span class="legend-dot" style="background:'+sc+'"></span>'+r.status+' '+r.percentage+'%';
+leg.appendChild(item);
+});
+}
+function updateHeatmap(){
+const cont=document.getElementById('heatmapContainer');
+cont.innerHTML='';
+const d=reportData.customer_satisfaction;
+if(!d||!d.rows.length)return;
+cont.innerHTML='<div class="heatmap-header"></div><div class="heatmap-header"><span class="heatmap-dot" style="background:#5a8a5a"></span> High ($10k+)</div><div class="heatmap-header"><span class="heatmap-dot" style="background:#c8a45e"></span> Mid ($5-10k)</div><div class="heatmap-header"><span class="heatmap-dot" style="background:#b85a5a"></span> Standard (&lt;$5k)</div>';
+d.rows.forEach(function(r){
+const row=document.createElement('div');row.className='heatmap-row';
+const lbl=document.createElement('div');lbl.className='heatmap-label';
+lbl.innerHTML=r.country+' <span class="heatmap-dot" style="background:#999;width:6px;height:6px"></span>';
+row.appendChild(lbl);
+const max=Math.max(r.high_value_customers||0,r.mid_value_customers||0,r.standard_customers||0,1);
+[{v:r.high_value_customers||0,c:'#5a8a5a'},{v:r.mid_value_customers||0,c:'#c8a45e'},{v:r.standard_customers||0,c:'#b85a5a'}].forEach(function(t){
+const cell=document.createElement('div');cell.className='heatmap-cell';
+const intensity=t.v/max;
+cell.style.background=`rgba(${t.c==='#5a8a5a'?'90,138,90':t.c==='#c8a45e'?'200,164,94':'184,90,90'},${0.15+intensity*0.7})`;
+cell.textContent=t.v||'—';
+row.appendChild(cell);
+});
+cont.appendChild(row);
+});
+}
+function updateEmployees(){
+const list=document.getElementById('employeeList');
+list.innerHTML='';
+const d=reportData.employee_territory;
+if(!d||!d.rows.length)return;
+d.rows.slice(0,8).forEach(function(r,i){
+const li=document.createElement('li');
+li.innerHTML='<div><div class="name">'+r.employee_name+'</div><div class="title">'+r.jobTitle+' &middot; '+r.office_city+', '+r.office_country+'</div></div><div class="amount">$'+Math.round(r.total_collected||0).toLocaleString()+'</div>';
+if(i===0)li.style.borderLeft='3px solid #c8a45e';
+list.appendChild(li);
+});
+}
+function updateGallery(){
+const grid=document.getElementById('galleryGrid');
+grid.innerHTML='';
+const d=reportData.gallery_products;
+if(!d||!d.rows.length)return;
+d.rows.forEach(function(r){
+const card=document.createElement('div');card.className='gallery-card';
+card.innerHTML='<h3>'+r.productName+'</h3><div class="meta">'+r.productLine+' &middot; '+r.productScale+' &middot; '+r.productVendor+'</div><div class="price">$'+r.MSRP+'</div><div class="margin">'+r.margin_percent+'% margin &middot; $'+r.profit_margin+' profit</div><span class="stock '+r.stock_status+'">'+r.stock_status+'</span>';
+grid.appendChild(card);
+});
+document.getElementById('galleryCount').textContent=d.rows.length;
+}
+function applyFilters(){
+const p={};
+const pl=document.getElementById('filterProductLine').value;
+const co=document.getElementById('filterCountry').value;
+const mn=document.getElementById('filterMinPrice').value;
+const mx=document.getElementById('filterMaxPrice').value;
+if(pl)p.product_line=pl;
+if(co)p.country=co;
+if(mn)p.min_price=parseFloat(mn);
+if(mx)p.max_price=parseFloat(mx);
+init();
+}
+function resetFilters(){
+document.getElementById('filterProductLine').value='';
+document.getElementById('filterCountry').value='';
+document.getElementById('filterMinPrice').value='';
+document.getElementById('filterMaxPrice').value='';
+init();
+}
+function showError(msg){const b=document.getElementById('errorBanner');b.textContent=msg;b.style.display='block'}
+</script>
+</body>
+</html>
